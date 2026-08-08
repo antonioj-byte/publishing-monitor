@@ -1,6 +1,1 @@
-{
-  "crons": [
-    { "path": "/api/cron/ingest", "schedule": "0 */2 * * *" },
-    { "path": "/api/cron/classify", "schedule": "30 * * * *" }
-  ]
-}
+{}
