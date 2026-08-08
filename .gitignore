@@ -28,6 +28,9 @@ yarn-error.log*
 # local env files
 .env*.local
 
+# discovery output (regenerate with npm run discover-feeds)
+scripts/output/
+
 # vercel
 .vercel
 

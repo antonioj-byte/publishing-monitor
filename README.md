@@ -1,36 +1,64 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Scouting Editorial — RSS Monitor MVP
 
-## Getting Started
+Agregador interno de señales del sector del libro. Ingesta RSS, clasificación con Claude, dashboard filtrable.
 
-First, run the development server:
+## Setup
+
+### 1. Supabase
+
+1. Crear proyecto en [supabase.com](https://supabase.com) (región EU recomendada).
+2. Ejecutar el SQL de [`supabase/migrations/001_initial_schema.sql`](supabase/migrations/001_initial_schema.sql) en el SQL Editor.
+3. Copiar credenciales a `.env.local`:
 
 ```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+cp .env.example .env.local
+# Rellenar SUPABASE_URL, SUPABASE_ANON_KEY, SUPABASE_SERVICE_ROLE_KEY
+# También ANTHROPIC_API_KEY y CRON_SECRET (string aleatorio)
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Para el dashboard en cliente, duplica URL y anon key con prefijo `NEXT_PUBLIC_`.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+### 2. Instalar y verificar
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+```bash
+npm install
+npm run smoke-db          # Verifica conexión DB
+npm run discover-feeds    # Descubre feeds RSS
+npm run seed-sources      # Inserta fuentes en DB
+npm run test-feeds        # Valida que los feeds parsean
+npm run dev
+```
 
-## Learn More
+### 3. Ingesta y clasificación (local)
 
-To learn more about Next.js, take a look at the following resources:
+```bash
+curl -H "Authorization: Bearer $CRON_SECRET" http://localhost:3000/api/cron/ingest
+curl -H "Authorization: Bearer $CRON_SECRET" http://localhost:3000/api/cron/classify
+```
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+## Deploy (Vercel)
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+1. Push a GitHub e importar en Vercel.
+2. Configurar las mismas env vars.
+3. Los crons en `vercel.json` se activan en producción (requiere plan Pro para frecuencia <1/día; alternativa: cron-job.org con Bearer token).
 
-## Deploy on Vercel
+## Scripts
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+| Comando | Descripción |
+|---------|-------------|
+| `npm run discover-feeds` | Busca RSS en dominios semilla |
+| `npm run seed-sources` | Inserta fuentes en Supabase |
+| `npm run test-feeds` | Valida feeds activos |
+| `npm run smoke-db` | Test de conexión DB |
+| `npm run validate-mvp` | Comprueba criterios MVP contra Supabase |
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+## Fuentes semilla
+
+23 dominios en `scripts/seed-data.ts`. Tras discovery + overrides manuales, **19 fuentes** tienen RSS válido (≥15 requerido). Cuatro sin feed detectable: Publishers Weekly, The Bookseller, Shelf Awareness, Publishers Marketplace — ver `DEPLOY.md`.
+
+## Arquitectura
+
+- **Ingesta** (`/api/cron/ingest`): cada 2h, parsea RSS y deduplica por URL.
+- **Clasificación** (`/api/cron/classify`): cada hora, Claude puntúa items sin score.
+- **Dashboard** (`/`): filtros por categoría/región, orden por fecha o relevancia.
+- **Export** (`/api/export/week`): markdown agrupado por categoría para newsletter.
