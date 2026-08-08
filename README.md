@@ -1,4 +1,4 @@
-# Scouting Editorial — RSS Monitor MVP
+# Publishing Monitor
 
 Agregador interno de señales del sector del libro. Ingesta RSS, clasificación con Claude, dashboard filtrable.
 
