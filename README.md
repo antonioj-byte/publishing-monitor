@@ -145,6 +145,10 @@ El servicio lee variables desde `.env` (macOS vía `deploy/run-bot.sh` generado 
 
 Los medios sin RSS usan scraping de la sección concreta (Fase 7).
 
+## Vercel (emails de error)
+
+Este bot **no se despliega en Vercel**. Si recibes emails de fallo de deploy, el repo incluye `vercel.json` para cancelar builds automáticamente. Para eliminarlos del todo, desconecta el proyecto en el [dashboard de Vercel](https://vercel.com/dashboard). Detalle: [`docs/VERCEL.md`](docs/VERCEL.md).
+
 ## Medios con paywall — alternativas
 
 | Medio | Problema | Alternativa |

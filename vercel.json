@@ -1,0 +1,4 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "ignoreCommand": "echo 'Bot Python local — sin despliegue en Vercel' && exit 0"
+}
