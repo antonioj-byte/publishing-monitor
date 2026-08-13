@@ -14,6 +14,7 @@ class Settings:
     telegram_chat_id: str
     database_path: str
     min_relevance_score: int
+    max_articles_per_informe: int
     timezone: str
 
     @classmethod
@@ -24,6 +25,7 @@ class Settings:
             telegram_chat_id=os.getenv("TELEGRAM_CHAT_ID", ""),
             database_path=os.getenv("DATABASE_PATH", "./data/editorial.db"),
             min_relevance_score=int(os.getenv("MIN_RELEVANCE_SCORE", "3")),
+            max_articles_per_informe=int(os.getenv("MAX_ARTICLES_PER_INFORME", "50")),
             timezone=os.getenv("TIMEZONE", "Europe/Madrid"),
         )
 

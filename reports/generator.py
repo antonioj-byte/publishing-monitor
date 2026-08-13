@@ -31,6 +31,8 @@ class ReportResult:
     text: str
     article_ids: list[int]
     mode: str
+    truncated: bool = False
+    total_matched: int = 0
 
 
 def _tz_now() -> datetime:
@@ -94,6 +96,12 @@ def build_report(mode: str = "informe") -> ReportResult:
         include_sent = False
 
     articles = _fetch_articles(since, include_sent=include_sent)
+    total_matched = len(articles)
+    max_items = settings.max_articles_per_informe
+    truncated = total_matched > max_items
+    if truncated:
+        articles = articles[:max_items]
+
     lines: list[str] = []
     article_ids: list[int] = []
 
@@ -102,11 +110,19 @@ def build_report(mode: str = "informe") -> ReportResult:
         lines.append(f"📋 Informe de hoy — {date_str}")
     else:
         lines.append(f"📋 Informe editorial — {date_str}")
+    if truncated:
+        lines.append(
+            f"_(Mostrando {max_items} de {total_matched} artículos; "
+            f"usa /informe_hoy para acotar o espera al cierre diario.)_"
+        )
     lines.append("")
 
     if not articles:
         lines.append("_No hay artículos que cumplan los criterios en este periodo._")
-        return ReportResult(text="\n".join(lines), article_ids=[], mode=mode)
+        return ReportResult(
+            text="\n".join(lines), article_ids=[], mode=mode,
+            truncated=False, total_matched=total_matched,
+        )
 
     for categoria in ("ideas", "noticias"):
         cat_items = [a for a in articles if a["categoria"] == categoria]
@@ -133,7 +149,13 @@ def build_report(mode: str = "informe") -> ReportResult:
     while lines and lines[-1] == "":
         lines.pop()
 
-    return ReportResult(text="\n".join(lines), article_ids=article_ids, mode=mode)
+    return ReportResult(
+        text="\n".join(lines),
+        article_ids=article_ids,
+        mode=mode,
+        truncated=truncated,
+        total_matched=total_matched,
+    )
 
 
 def split_message(text: str, max_len: int = 4000) -> list[str]:

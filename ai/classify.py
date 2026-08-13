@@ -125,6 +125,11 @@ def classify_article(
             )
             block = next(b for b in response.content if b.type == "text")
             return _parse_response(block.text)
+        except anthropic.AuthenticationError as exc:
+            raise RuntimeError(
+                "ANTHROPIC_API_KEY inválida o revocada. "
+                "Genera una nueva en console.anthropic.com y actualiza .env"
+            ) from exc
         except anthropic.NotFoundError:
             continue
         except anthropic.APIError:
