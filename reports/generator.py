@@ -9,21 +9,20 @@ from zoneinfo import ZoneInfo
 
 from bot.config import settings
 from db.connection import get_connection
-from db.models import Categoria, Region
-
-REGION_LABELS: dict[Region, str] = {
-    "eu": "Europa",
-    "us": "Estados Unidos",
-    "uk": "Reino Unido",
-    "latam": "Latinoamérica",
-    "ca": "Canadá",
-    "apac": "Asia-Pacífico",
-}
+from db.models import Categoria
 
 CATEGORY_HEADERS: dict[Categoria, str] = {
     "ideas": "📚 Ideas del mundo editorial",
     "noticias": "📰 Noticias del mundo editorial",
 }
+
+# (score, section title, max items per category block)
+def _relevance_tiers() -> list[tuple[int, str, int]]:
+    return [
+        (5, "🔥 Destacado", settings.max_destacados),
+        (4, "📌 Relevante", settings.max_relevantes),
+        (3, "📋 Señales secundarias", settings.max_secundarios),
+    ]
 
 
 @dataclass
@@ -53,7 +52,7 @@ def _fetch_articles(since: datetime, include_sent: bool = False) -> list[dict]:
     min_score = settings.min_relevance_score
     query = """
         SELECT a.id, a.titulo_original, a.titular_traducido, a.resumen_generado,
-               a.url, a.categoria, m.region, m.nombre AS medio_nombre
+               a.url, a.categoria, a.relevance_score, m.region, m.nombre AS medio_nombre
         FROM articulos a
         JOIN medios m ON m.id = a.medio_id
         WHERE a.procesado = 1
@@ -63,7 +62,7 @@ def _fetch_articles(since: datetime, include_sent: bool = False) -> list[dict]:
     params: list = [min_score, since.astimezone(ZoneInfo("UTC")).isoformat()]
     if not include_sent:
         query += " AND a.enviado = 0"
-    query += " ORDER BY a.categoria, m.region, a.relevance_score DESC, a.fecha_ingesta DESC"
+    query += " ORDER BY a.relevance_score DESC, a.categoria, a.fecha_ingesta DESC"
 
     with get_connection() as conn:
         rows = conn.execute(query, params).fetchall()
@@ -73,15 +72,34 @@ def _fetch_articles(since: datetime, include_sent: bool = False) -> list[dict]:
 def _format_entry(item: dict) -> str:
     titular = item["titular_traducido"] or item["titulo_original"]
     resumen = item["resumen_generado"] or "(sin resumen)"
-    return f"📰 {titular}\n{resumen}\n🔗 {item['url']}"
+    medio = item.get("medio_nombre", "")
+    source = f" — _{medio}_" if medio else ""
+    return f"📰 {titular}{source}\n{resumen}\n🔗 {item['url']}"
 
 
-def _group_by_region(items: list[dict]) -> dict[str, list[dict]]:
-    grouped: dict[str, list[dict]] = {}
-    for item in items:
-        region = item["region"]
-        grouped.setdefault(region, []).append(item)
-    return grouped
+def _apply_tier_limits(articles: list[dict]) -> tuple[list[dict], bool]:
+    """Pick articles respecting per-tier caps and global max."""
+    tiers = _relevance_tiers()
+    selected: list[dict] = []
+    seen_ids: set[int] = set()
+    tier_counts: dict[int, int] = {t[0]: 0 for t in tiers}
+    global_max = settings.max_articles_per_informe
+
+    for item in articles:
+        if len(selected) >= global_max:
+            break
+        score = item.get("relevance_score") or 3
+        tier_limit = next((t[2] for t in tiers if t[0] == score), 0)
+        if tier_limit and tier_counts.get(score, 0) >= tier_limit:
+            continue
+        if item["id"] in seen_ids:
+            continue
+        selected.append(item)
+        seen_ids.add(item["id"])
+        tier_counts[score] = tier_counts.get(score, 0) + 1
+
+    truncated = len(selected) < len(articles)
+    return selected, truncated
 
 
 def build_report(mode: str = "informe") -> ReportResult:
@@ -97,10 +115,7 @@ def build_report(mode: str = "informe") -> ReportResult:
 
     articles = _fetch_articles(since, include_sent=include_sent)
     total_matched = len(articles)
-    max_items = settings.max_articles_per_informe
-    truncated = total_matched > max_items
-    if truncated:
-        articles = articles[:max_items]
+    articles, truncated = _apply_tier_limits(articles)
 
     lines: list[str] = []
     article_ids: list[int] = []
@@ -112,8 +127,7 @@ def build_report(mode: str = "informe") -> ReportResult:
         lines.append(f"📋 Informe editorial — {date_str}")
     if truncated:
         lines.append(
-            f"_(Mostrando {max_items} de {total_matched} artículos; "
-            f"usa /informe_hoy para acotar o espera al cierre diario.)_"
+            f"_(Mostrando {len(articles)} de {total_matched} artículos priorizados por relevancia.)_"
         )
     lines.append("")
 
@@ -132,14 +146,15 @@ def build_report(mode: str = "informe") -> ReportResult:
         lines.append(CATEGORY_HEADERS[categoria])
         lines.append("")
 
-        grouped = _group_by_region(cat_items)
-        for region, region_items in grouped.items():
-            if len(cat_items) >= 5 and len(grouped) > 1:
-                label = REGION_LABELS.get(region, region.upper())
-                lines.append(f"🌍 {label}")
-                lines.append("")
+        for score, tier_title, _ in _relevance_tiers():
+            tier_items = [a for a in cat_items if (a.get("relevance_score") or 3) == score]
+            if not tier_items:
+                continue
 
-            for item in region_items:
+            lines.append(tier_title)
+            lines.append("")
+
+            for item in tier_items:
                 lines.append(_format_entry(item))
                 lines.append("")
                 article_ids.append(item["id"])

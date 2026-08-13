@@ -10,7 +10,7 @@ from dataclasses import dataclass
 
 import anthropic
 
-from bot.config import settings
+from bot.config import EDITORIAL_CRITERIA, settings
 from db.connection import get_connection
 from db.models import Categoria
 
@@ -19,7 +19,7 @@ logger = logging.getLogger(__name__)
 MODEL = "claude-sonnet-4-20250514"
 FALLBACK_MODEL = "claude-3-5-haiku-20241022"
 
-SYSTEM_PROMPT = """Eres editor de un informe diario sobre cultura, literatura y el mundo editorial.
+SYSTEM_PROMPT_BASE = """Eres editor de un informe diario sobre cultura, literatura y el mundo editorial.
 
 Para cada artículo recibirás titular, resumen, fuente, categoría prevista e idioma.
 
@@ -28,16 +28,34 @@ Responde SOLO con JSON válido:
   "categoria": "ideas" | "noticias",
   "relevance_score": number,
   "resumen_generado": string,
-  "titular_traducido": string | null
+  "titular_traducido": string
 }
 
-Reglas:
-- categoria "ideas": ensayos, crónicas largas, reportajes de fondo, reflexión cultural.
-- categoria "noticias": actualidad, novedades, reseñas breves, industria editorial.
-- Confirma la categoría prevista salvo error claro del medio.
-- relevance_score 1-5: 5=muy relevante para lector cultural/editorial; 1=ruido.
-- resumen_generado: 2-4 líneas en español, informativas.
-- titular_traducido: titular claro en español si el original no está en español; null si ya está en español."""
+Reglas de categoría:
+- "ideas": ensayos, crónicas largas, reportajes de fondo, reflexión cultural.
+- "noticias": actualidad, novedades, reseñas breves, industria editorial.
+
+Reglas de traducción (OBLIGATORIO):
+- resumen_generado: SIEMPRE 2-4 líneas en castellano (español de España), aunque el original esté en otro idioma.
+- titular_traducido: SIEMPRE titular claro en castellano. Si el original ya está en español, reescríbelo más claro si hace falta; nunca devuelvas null.
+
+Reglas de relevance_score (1-5):
+- 5 = destacado: pieza imprescindible del día (ensayo de fondo, reportaje clave, noticia editorial de alto impacto)
+- 4 = relevante: merece lectura, buen contexto cultural/editorial
+- 3 = secundario: interesante pero no prioritario
+- 2 = marginal: poco relevante para el informe
+- 1 = ruido: descartar (farándula, relleno, off-topic)
+
+Sé exigente con los 5: no más del 15% de artículos deberían ser 5."""
+
+
+def _load_system_prompt() -> str:
+    prompt = SYSTEM_PROMPT_BASE
+    if EDITORIAL_CRITERIA.exists():
+        extra = EDITORIAL_CRITERIA.read_text(encoding="utf-8").strip()
+        if extra:
+            prompt += f"\n\n--- Criterios editoriales del usuario ---\n{extra}"
+    return prompt
 
 
 @dataclass
@@ -56,9 +74,7 @@ def _parse_response(text: str) -> ClassificationResult:
     categoria = data["categoria"]
     if categoria not in ("ideas", "noticias"):
         raise ValueError(f"Invalid categoria: {categoria}")
-    titular = data.get("titular_traducido")
-    if titular is not None:
-        titular = str(titular).strip() or None
+    titular = str(data.get("titular_traducido", "")).strip() or None
     return ClassificationResult(
         categoria=categoria,
         relevance_score=score,
@@ -120,7 +136,7 @@ def classify_article(
             response = client.messages.create(
                 model=model,
                 max_tokens=600,
-                system=SYSTEM_PROMPT,
+                system=_load_system_prompt(),
                 messages=[{"role": "user", "content": user_msg}],
             )
             block = next(b for b in response.content if b.type == "text")
