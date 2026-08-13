@@ -17,7 +17,7 @@ from db.models import Categoria
 logger = logging.getLogger(__name__)
 
 MODEL = "claude-sonnet-4-20250514"
-FALLBACK_MODEL = "claude-3-5-sonnet-20241022"
+FALLBACK_MODEL = "claude-3-5-haiku-20241022"
 
 SYSTEM_PROMPT = """Eres editor de un informe diario sobre cultura, literatura y el mundo editorial.
 
