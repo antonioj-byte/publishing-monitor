@@ -13,8 +13,21 @@ def get_connection() -> sqlite3.Connection:
     return conn
 
 
+def _migrate_schema(conn: sqlite3.Connection) -> None:
+    cols = {row[1] for row in conn.execute("PRAGMA table_info(medios)")}
+    if "tier" not in cols:
+        conn.execute(
+            "ALTER TABLE medios ADD COLUMN tier INTEGER NOT NULL DEFAULT 2 CHECK (tier IN (1, 2))"
+        )
+    if "pais" not in cols:
+        conn.execute(
+            "ALTER TABLE medios ADD COLUMN pais TEXT NOT NULL DEFAULT 'xx'"
+        )
+
+
 def init_schema() -> None:
     schema_path = Path(__file__).parent / "schema.sql"
     with get_connection() as conn:
         conn.executescript(schema_path.read_text(encoding="utf-8"))
+        _migrate_schema(conn)
         conn.commit()

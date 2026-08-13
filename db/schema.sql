@@ -8,6 +8,8 @@ CREATE TABLE IF NOT EXISTS medios (
     categoria_default TEXT NOT NULL CHECK (categoria_default IN ('ideas', 'noticias')),
     idioma TEXT NOT NULL,
     region TEXT NOT NULL CHECK (region IN ('eu', 'us', 'uk', 'latam', 'ca', 'apac')),
+    pais TEXT NOT NULL DEFAULT 'xx',
+    tier INTEGER NOT NULL DEFAULT 2 CHECK (tier IN (1, 2)),
     activo INTEGER NOT NULL DEFAULT 1
 );
 

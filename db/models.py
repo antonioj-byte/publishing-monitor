@@ -7,6 +7,14 @@ Region = Literal["eu", "us", "uk", "latam", "ca", "apac"]
 
 
 @dataclass
+class ReportFilter:
+    days: int | None = None
+    pais: str | None = None
+    region: str | None = None
+    location_label: str | None = None
+
+
+@dataclass
 class Medio:
     id: int
     nombre: str
@@ -17,6 +25,7 @@ class Medio:
     categoria_default: Categoria
     idioma: str
     region: Region
+    pais: str
     activo: bool
 
 

@@ -13,6 +13,7 @@ import anthropic
 from bot.config import EDITORIAL_CRITERIA, settings
 from db.connection import get_connection
 from db.models import Categoria
+from medios_tiers import tier_label
 
 logger = logging.getLogger(__name__)
 
@@ -21,7 +22,7 @@ FALLBACK_MODEL = "claude-3-5-haiku-20241022"
 
 SYSTEM_PROMPT_BASE = """Eres editor de un informe diario sobre cultura, literatura y el mundo editorial.
 
-Para cada artículo recibirás titular, resumen, fuente, categoría prevista e idioma.
+Para cada artículo recibirás titular, resumen, fuente, tier del medio, fecha de publicación, categoría prevista e idioma.
 
 Responde SOLO con JSON válido:
 {
@@ -45,6 +46,10 @@ Reglas de relevance_score (1-5):
 - 3 = secundario: interesante pero no prioritario
 - 2 = marginal: poco relevante para el informe
 - 1 = ruido: descartar (farándula, relleno, off-topic)
+
+Factores que suben el score:
+- Medio Tier 1 (cabeceras de referencia): suele merecer 4-5 si el contenido es sólido; Tier 2 parte de 3.
+- Actualidad: prioriza piezas recientes y libros/eventos de las últimas semanas; contenido antiguo sin gancho → score más bajo.
 
 Sé exigente con los 5: no más del 15% de artículos deberían ser 5."""
 
@@ -110,6 +115,8 @@ def classify_article(
     medio: str,
     categoria_default: Categoria,
     idioma: str,
+    medio_tier: int = 2,
+    fecha_publicacion: str | None = None,
 ) -> ClassificationResult:
     if not settings.anthropic_api_key:
         logger.warning("ANTHROPIC_API_KEY missing — using offline classification")
@@ -121,11 +128,14 @@ def classify_article(
         )
 
     client = anthropic.Anthropic(api_key=settings.anthropic_api_key)
+    fecha_line = fecha_publicacion or "(desconocida)"
     user_msg = "\n".join(
         [
             f"Titular: {titulo}",
             f"Resumen: {resumen or '(sin resumen)'}",
             f"Fuente: {medio}",
+            f"Tier del medio: {tier_label(medio_tier)}",
+            f"Fecha de publicación: {fecha_line}",
             f"Categoría prevista: {categoria_default}",
             f"Idioma: {idioma}",
         ]
@@ -164,7 +174,8 @@ def classify_pending(limit: int = 50, delay_seconds: float = 0.2) -> dict[str, i
         rows = conn.execute(
             """
             SELECT a.id, a.titulo_original, a.resumen_raw, a.categoria, a.idioma,
-                   m.nombre AS medio_nombre, m.categoria_default
+                   a.fecha_publicacion, m.nombre AS medio_nombre,
+                   m.categoria_default, m.tier AS medio_tier
             FROM articulos a
             JOIN medios m ON m.id = a.medio_id
             WHERE a.procesado = 0
@@ -184,6 +195,8 @@ def classify_pending(limit: int = 50, delay_seconds: float = 0.2) -> dict[str, i
                     medio=row["medio_nombre"],
                     categoria_default=row["categoria_default"],
                     idioma=row["idioma"],
+                    medio_tier=row["medio_tier"] or 2,
+                    fecha_publicacion=row["fecha_publicacion"],
                 )
                 conn.execute(
                     """
