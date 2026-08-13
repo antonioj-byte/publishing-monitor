@@ -10,6 +10,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 import feedparser
 
+from ai.classify import MODEL
 from bot.config import settings, PROJECT_ROOT
 from db.connection import get_connection, init_schema
 from reports.generator import build_report, split_message
@@ -36,7 +37,7 @@ def main() -> None:
             import anthropic
             client = anthropic.Anthropic(api_key=settings.anthropic_api_key)
             client.messages.create(
-                model="claude-sonnet-4-20250514",
+                model=MODEL,
                 max_tokens=20,
                 messages=[{"role": "user", "content": "Responde solo: ok"}],
             )

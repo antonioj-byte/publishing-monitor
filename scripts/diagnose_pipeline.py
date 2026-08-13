@@ -66,7 +66,7 @@ def _diagnose_country(report_filter: ReportFilter) -> None:
         print("⚠️  Ningún evento supera el umbral de priorización. Prueba más días.")
     elif not in_window:
         print("⚠️  Nada publicado/ingerido en la ventana. Prueba:")
-        print(f"    /informe 7 {report_filter.location_label.split()[0].lower()}")
+        print(f"    /informe 7 {report_filter.location_label.lower()}")
 
 
 def main() -> None:

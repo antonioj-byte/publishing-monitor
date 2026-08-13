@@ -94,7 +94,7 @@ def _count_country_candidates(
     """Return (classified relevant in window, pending, total for country/region)."""
     since_iso = since.astimezone(ZoneInfo("UTC")).isoformat()
     date_col = (
-        "COALESCE(a.fecha_publicacion, a.fecha_ingesta)"
+        "COALESCE(NULLIF(a.fecha_publicacion, ''), a.fecha_ingesta)"
         if date_by_publication
         else "a.fecha_ingesta"
     )
@@ -148,12 +148,18 @@ def _empty_country_message(
         f"{in_window} clasificados en ventana, {pending} pendientes de clasificar.",
     ]
     if pending:
-        lines.append("Espera a que termine la clasificación o ejecuta: `python3 scripts/classify_pending.py`")
+        lines.append(
+            "Espera a que termine la clasificación o ejecuta: "
+            "`python3 scripts/classify_pending.py`"
+        )
     elif total_geo == 0:
-        lines.append("No hay artículos ingeridos de ese país. Ejecuta: `python3 scripts/run_ingest_once.py`")
+        lines.append(
+            "No hay artículos ingeridos de ese país. Ejecuta: "
+            "`python3 scripts/run_ingest_once.py`"
+        )
     else:
         lines.append(
-            f"Prueba un periodo más amplio: `/informe 7 {label.split()[0].lower()}` "
+            f"Prueba un periodo más amplio: `/informe 7 {label.lower()}` "
             "o revisa el filtro editorial con `python3 scripts/diagnose_pipeline.py`."
         )
     return "\n".join(lines)
@@ -187,7 +193,10 @@ def _fetch_articles(
     else:
         since_iso = since.astimezone(ZoneInfo("UTC")).isoformat()
         if date_by_publication:
-            query += " AND COALESCE(a.fecha_publicacion, a.fecha_ingesta) >= ?"
+            query += (
+                " AND COALESCE(NULLIF(a.fecha_publicacion, ''), "
+                "a.fecha_ingesta) >= ?"
+            )
         else:
             query += " AND a.fecha_ingesta >= ?"
         params.append(since_iso)
@@ -200,7 +209,9 @@ def _fetch_articles(
             query += " AND m.region = ?"
             params.append(report_filter.region)
 
-    if not include_sent:
+    # A continuation uses a persisted snapshot of IDs. Keep already-shown IDs
+    # in that snapshot so its cursor still addresses the same ordered list.
+    if not include_sent and not article_ids:
         query += " AND a.enviado = 0"
 
     query += " ORDER BY a.relevance_score DESC, a.categoria, a.fecha_ingesta DESC"
@@ -254,6 +265,26 @@ def _order_articles(articles: list[dict]) -> list[dict]:
                 ]
                 ordered.extend(tier_items)
     return ordered
+
+
+def _apply_report_limits(articles: list[dict]) -> list[dict]:
+    """Apply configured score and total limits while preserving priority order."""
+    per_score_limits = {score: limit for score, _, limit in _relevance_tiers()}
+    counts = {score: 0 for score in per_score_limits}
+    limited: list[dict] = []
+    total_limit = max(0, settings.max_articles_per_informe)
+
+    for article in articles:
+        score = int(article.get("relevance_score") or 3)
+        score_limit = max(0, per_score_limits.get(score, 0))
+        if counts.get(score, 0) >= score_limit:
+            continue
+        if total_limit and len(limited) >= total_limit:
+            break
+        limited.append(article)
+        counts[score] = counts.get(score, 0) + 1
+
+    return limited
 
 
 def _format_entry(item: dict, *, show_tier: bool = False) -> str:
@@ -493,9 +524,8 @@ def build_report(
                 total_matched=0,
             )
 
-        batch, total_fetched = limit_batch_for_prioritization(articles)
+        batch, _ = limit_batch_for_prioritization(articles)
         prioritization = prioritize_articles(batch)
-        total_matched = total_fetched
         if not prioritization.articles:
             now = _tz_now()
             lines = _header_lines(mode, report_filter, now)
@@ -508,11 +538,12 @@ def build_report(
                 text="\n".join(lines),
                 article_ids=[],
                 mode=mode,
-                total_matched=total_matched,
+                total_matched=0,
             )
 
         trends = events_to_trends(prioritization.events)
-        ordered = _order_articles(prioritization.articles)
+        ordered = _apply_report_limits(_order_articles(prioritization.articles))
+        total_matched = len(ordered)
         all_ids = [a["id"] for a in ordered]
         start_cursor = 0
         include_trends = True

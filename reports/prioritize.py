@@ -111,6 +111,18 @@ def _article_timestamp(article: dict) -> datetime | None:
     )
 
 
+def _article_priority_key(article: dict) -> tuple[int, int, float]:
+    """Sort best articles first: relevance, Tier 1, then recency."""
+    ts = _article_timestamp(article)
+    ts_ord = ts.timestamp() if ts else 0.0
+    tier = int(article.get("medio_tier") or 2)
+    return (
+        -(article.get("relevance_score") or 0),
+        tier,
+        -ts_ord,
+    )
+
+
 def _compute_embeddings(texts: list[str]) -> np.ndarray:
     if not texts:
         return np.empty((0, 0))
@@ -214,16 +226,7 @@ def limit_batch_for_prioritization(articles: list[dict]) -> tuple[list[dict], in
     if total <= cap:
         return articles, total
 
-    def sort_key(article: dict) -> tuple:
-        ts = _article_timestamp(article)
-        ts_ord = ts.timestamp() if ts else 0.0
-        return (
-            -(article.get("relevance_score") or 0),
-            -(article.get("medio_tier") or 2),
-            -ts_ord,
-        )
-
-    ranked = sorted(articles, key=sort_key)
+    ranked = sorted(articles, key=_article_priority_key)
     logger.info(
         "Prioritization batch capped: %d → %d articles (PRIORITIZE_MAX_BATCH)",
         total,
@@ -346,24 +349,12 @@ def _score_event(articles: list[dict], now: datetime) -> ScoreBreakdown:
 
 
 def _pick_representative_title(articles: list[dict]) -> str:
-    def sort_key(article: dict) -> tuple:
-        return (
-            -(article.get("medio_tier") or 2),
-            -(article.get("relevance_score") or 0),
-        )
-
-    best = max(articles, key=sort_key)
+    best = min(articles, key=_article_priority_key)
     return best.get("titular_traducido") or best.get("titulo_original") or "(sin título)"
 
 
 def _order_articles_within_event(articles: list[dict]) -> list[dict]:
-    return sorted(
-        articles,
-        key=lambda a: (
-            -(a.get("medio_tier") or 2),
-            -(a.get("relevance_score") or 0),
-        ),
-    )
+    return sorted(articles, key=_article_priority_key)
 
 
 def cluster_articles(articles: list[dict]) -> list[list[dict]]:

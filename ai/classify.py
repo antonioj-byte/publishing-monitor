@@ -18,8 +18,9 @@ from medios_tiers import get_tier, tier_label
 
 logger = logging.getLogger(__name__)
 
-MODEL = "claude-sonnet-4-20250514"
-FALLBACK_MODEL = "claude-3-5-haiku-20241022"
+MODEL = "claude-sonnet-5"
+FALLBACK_MODEL = "claude-haiku-4-5"
+_API_AUTH_FAILED = False
 
 SYSTEM_PROMPT_BASE = """Eres editor de un informe diario EXCLUSIVAMENTE sobre libros, literatura, autores y la industria editorial (editoriales, librerías, derechos, traducciones, ferias del libro, premios literarios).
 
@@ -154,8 +155,15 @@ def classify_article(
     medio_tier: int = 2,
     fecha_publicacion: str | None = None,
 ) -> ClassificationResult:
-    if not settings.anthropic_api_key:
-        logger.warning("ANTHROPIC_API_KEY missing — using offline classification")
+    global _API_AUTH_FAILED
+
+    if not settings.anthropic_api_key or _API_AUTH_FAILED:
+        reason = (
+            "ANTHROPIC_API_KEY missing"
+            if not settings.anthropic_api_key
+            else "Anthropic authentication previously failed"
+        )
+        logger.warning("%s — using offline classification", reason)
         return classify_offline(
             titulo=titulo,
             resumen=resumen,
@@ -202,10 +210,18 @@ def classify_article(
                 )
             return result
         except anthropic.AuthenticationError as exc:
-            raise RuntimeError(
-                "ANTHROPIC_API_KEY inválida o revocada. "
-                "Genera una nueva en console.anthropic.com y actualiza .env"
-            ) from exc
+            _API_AUTH_FAILED = True
+            logger.error(
+                "ANTHROPIC_API_KEY inválida o revocada; el pipeline continuará "
+                "con clasificación offline. Actualiza .env y reinicia el bot.",
+                exc_info=exc,
+            )
+            return classify_offline(
+                titulo=titulo,
+                resumen=resumen,
+                categoria_default=categoria_default,
+                idioma=idioma,
+            )
         except anthropic.NotFoundError:
             continue
         except anthropic.APIError:
@@ -236,7 +252,7 @@ def classify_pending(limit: int = 50, delay_seconds: float = 0.2) -> dict[str, i
         ).fetchall()
 
         for i, row in enumerate(rows):
-            if use_api and i > 0 and delay_seconds > 0:
+            if use_api and not _API_AUTH_FAILED and i > 0 and delay_seconds > 0:
                 time.sleep(delay_seconds)
             try:
                 result = classify_article(
