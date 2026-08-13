@@ -10,6 +10,7 @@ from zoneinfo import ZoneInfo
 from bot.config import settings
 from db.connection import get_connection
 from db.models import Categoria
+from reports.trends import boost_trend_scores, find_cross_media_trends
 
 CATEGORY_HEADERS: dict[Categoria, str] = {
     "ideas": "📚 Ideas del mundo editorial",
@@ -52,7 +53,8 @@ def _fetch_articles(since: datetime, include_sent: bool = False) -> list[dict]:
     min_score = settings.min_relevance_score
     query = """
         SELECT a.id, a.titulo_original, a.titular_traducido, a.resumen_generado,
-               a.url, a.categoria, a.relevance_score, m.region, m.nombre AS medio_nombre
+               a.url, a.categoria, a.relevance_score, m.region, m.nombre AS medio_nombre,
+               m.tier AS medio_tier
         FROM articulos a
         JOIN medios m ON m.id = a.medio_id
         WHERE a.procesado = 1
@@ -69,12 +71,31 @@ def _fetch_articles(since: datetime, include_sent: bool = False) -> list[dict]:
     return [dict(r) for r in rows]
 
 
-def _format_entry(item: dict) -> str:
+def _format_entry(item: dict, *, show_tier: bool = False) -> str:
     titular = item["titular_traducido"] or item["titulo_original"]
     resumen = item["resumen_generado"] or "(sin resumen)"
     medio = item.get("medio_nombre", "")
-    source = f" — _{medio}_" if medio else ""
+    tier_suffix = ""
+    if show_tier and item.get("medio_tier") == 1:
+        tier_suffix = " · Tier 1"
+    source = f" — _{medio}{tier_suffix}_" if medio else ""
     return f"📰 {titular}{source}\n{resumen}\n🔗 {item['url']}"
+
+
+def _format_trends_section(trends: list[dict], max_trends: int = 5) -> list[str]:
+    if not trends:
+        return []
+
+    lines = ["📡 En varios medios", ""]
+    for trend in trends[:max_trends]:
+        medios = ", ".join(sorted(m for m in trend["medios"] if m))
+        label = trend["topic_label"].replace("|", " · ")
+        lines.append(f"• _{label}_ — {len(trend['medios'])} medios: {medios}")
+        lines.append("")
+        for item in trend["articles"][:2]:
+            lines.append(_format_entry(item))
+            lines.append("")
+    return lines
 
 
 def _apply_tier_limits(articles: list[dict]) -> tuple[list[dict], bool]:
@@ -115,6 +136,8 @@ def build_report(mode: str = "informe") -> ReportResult:
 
     articles = _fetch_articles(since, include_sent=include_sent)
     total_matched = len(articles)
+    trends = find_cross_media_trends(articles)
+    articles = boost_trend_scores(articles, trends)
     articles, truncated = _apply_tier_limits(articles)
 
     lines: list[str] = []
@@ -130,6 +153,10 @@ def build_report(mode: str = "informe") -> ReportResult:
             f"_(Mostrando {len(articles)} de {total_matched} artículos priorizados por relevancia.)_"
         )
     lines.append("")
+
+    trend_lines = _format_trends_section(trends)
+    if trend_lines:
+        lines.extend(trend_lines)
 
     if not articles:
         lines.append("_No hay artículos que cumplan los criterios en este periodo._")
@@ -155,7 +182,7 @@ def build_report(mode: str = "informe") -> ReportResult:
             lines.append("")
 
             for item in tier_items:
-                lines.append(_format_entry(item))
+                lines.append(_format_entry(item, show_tier=True))
                 lines.append("")
                 article_ids.append(item["id"])
 

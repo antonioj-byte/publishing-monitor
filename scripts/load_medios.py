@@ -9,6 +9,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from bot.config import MEDIOS_CSV
 from db.connection import get_connection, init_schema
+from medios_tiers import get_tier
 
 # Medios known to need scraping instead of broken/generic RSS
 # Medios whose primary RSS is broken; scraping used as fallback.
@@ -61,6 +62,9 @@ def load_medios(csv_path: Path | None = None) -> dict[str, int]:
                 url_scraping = row.get("url_scraping", "").strip() or None
                 metodo = row["metodo"].strip()
                 activo = row.get("activo", "true").strip().lower() in ("true", "1", "yes")
+                categoria_default = row["categoria_default"].strip()
+                tier_raw = row.get("tier", "").strip()
+                tier = int(tier_raw) if tier_raw in ("1", "2") else get_tier(nombre, categoria_default)
 
                 if metodo == "rss" and not url_rss:
                     metodo = "scraping"
@@ -75,9 +79,10 @@ def load_medios(csv_path: Path | None = None) -> dict[str, int]:
                     url_rss,
                     url_scraping,
                     metodo,
-                    row["categoria_default"].strip(),
+                    categoria_default,
                     row["idioma"].strip(),
                     row["region"].strip(),
+                    tier,
                     1 if activo else 0,
                 )
 
@@ -87,7 +92,7 @@ def load_medios(csv_path: Path | None = None) -> dict[str, int]:
                         UPDATE medios SET
                             url_site = ?, url_rss = ?, url_scraping = ?,
                             metodo = ?, categoria_default = ?, idioma = ?,
-                            region = ?, activo = ?
+                            region = ?, tier = ?, activo = ?
                         WHERE nombre = ?
                         """,
                         (*values, nombre),
@@ -98,8 +103,8 @@ def load_medios(csv_path: Path | None = None) -> dict[str, int]:
                         """
                         INSERT INTO medios (
                             nombre, url_site, url_rss, url_scraping, metodo,
-                            categoria_default, idioma, region, activo
-                        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                            categoria_default, idioma, region, tier, activo
+                        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                         """,
                         (nombre, *values),
                     )
