@@ -56,6 +56,7 @@ python3 -m pip install -r requirements.txt -q
 
 echo "→ Base de datos, medios y tiers"
 python3 scripts/init_db.py
+python3 scripts/load_medios.py
 python3 scripts/sync_tiers.py
 
 echo "→ Precalentar modelo de embeddings"

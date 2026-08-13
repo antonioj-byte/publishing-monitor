@@ -13,7 +13,7 @@ from telegram.ext import ContextTypes
 from bot.auth import is_authorized, unauthorized_message
 from bot.report_parser import parse_command_args, parse_free_text
 from db.models import ReportFilter
-from reports.generator import record_informe, split_message
+from reports.generator import mark_articles_sent, record_informe, split_message
 from reports.pipeline import build_editorial_report
 from reports.paises import list_available_locations
 from reports.session import load_session
@@ -149,8 +149,15 @@ async def _send_continuation(update: Update) -> None:
         )
         for chunk in split_message(report.text):
             await update.message.reply_text(chunk, disable_web_page_preview=True)
-        if not report.has_more and report.article_ids:
-            logger.info("Report continuation complete for chat=%s", chat_id)
+        if session.mode == "informe" and report.article_ids:
+            await asyncio.to_thread(mark_articles_sent, report.article_ids)
+            if not report.has_more:
+                await asyncio.to_thread(
+                    record_informe,
+                    session.article_ids,
+                    "manual",
+                )
+                logger.info("Report continuation complete for chat=%s", chat_id)
     except Exception as exc:
         logger.exception("Report continuation failed")
         await update.message.reply_text(f"Error al generar la continuación: {exc}")
@@ -192,11 +199,14 @@ async def _send_report(
             await update.message.reply_text(chunk, disable_web_page_preview=True)
 
         if record and report.article_ids:
-            await asyncio.to_thread(
-                record_informe,
-                report.article_ids,
-                "manual",
-            )
+            if report.has_more:
+                await asyncio.to_thread(mark_articles_sent, report.article_ids)
+            else:
+                await asyncio.to_thread(
+                    record_informe,
+                    report.article_ids,
+                    "manual",
+                )
 
         if not report.article_ids:
             logger.info("Empty report for mode=%s filter=%s", mode, report_filter)

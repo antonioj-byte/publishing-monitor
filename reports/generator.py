@@ -157,6 +157,11 @@ def _empty_country_message(
             "No hay artículos ingeridos de ese país. Ejecuta: "
             "`python3 scripts/run_ingest_once.py`"
         )
+    elif in_window:
+        lines.append(
+            "Hay artículos clasificados en la ventana, pero todos fueron "
+            "descartados por el filtro editorial."
+        )
     else:
         lines.append(
             f"Prueba un periodo más amplio: `/informe 7 {label.lower()}` "
@@ -337,9 +342,6 @@ def _format_trends_section(trends: list[dict], max_trends: int = 5) -> list[str]
         if trend.get("event_explanation"):
             lines.append(f"  _({trend['event_explanation']})_")
         lines.append("")
-        for item in trend["articles"][:2]:
-            lines.append(_format_entry(item))
-            lines.append("")
     return lines
 
 
@@ -432,6 +434,21 @@ def _build_pages(
         prospective = word_count + _word_count("\n".join(blocks_to_add))
         if article_ids and prospective > word_budget:
             break
+        if not article_ids and prospective > word_budget:
+            # Always advance the cursor. A single oversized entry is preferable
+            # to an endless /informe_mas loop at the same position.
+            lines.extend(blocks_to_add)
+            word_count = prospective
+            article_ids.append(item["id"])
+            if is_likely_untranslated(
+                idioma=item.get("idioma", "es"),
+                titulo_original=item.get("titulo_original", ""),
+                titular_traducido=item.get("titular_traducido"),
+                resumen_generado=item.get("resumen_generado"),
+                resumen_raw=item.get("resumen_raw"),
+            ):
+                untranslated_count += 1
+            continue
 
         for block in blocks_to_add:
             added, word_count = _append_within_word_limit(
@@ -599,6 +616,17 @@ def split_message(text: str, max_len: int = 4000) -> list[str]:
     current_len = 0
 
     for block in text.split("\n\n"):
+        if len(block) > max_len:
+            if current:
+                chunks.append("\n\n".join(current))
+                current = []
+                current_len = 0
+            chunks.extend(
+                block[start : start + max_len]
+                for start in range(0, len(block), max_len)
+            )
+            continue
+
         block_len = len(block) + 2
         if current_len + block_len > max_len and current:
             chunks.append("\n\n".join(current))

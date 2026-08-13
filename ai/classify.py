@@ -13,7 +13,7 @@ import anthropic
 from ai.editorial_filter import is_editorial_scope
 from bot.config import EDITORIAL_CRITERIA, settings
 from db.connection import get_connection
-from db.models import Categoria
+from db.models import Categoria, ReportFilter
 from medios_tiers import get_tier, tier_label
 
 logger = logging.getLogger(__name__)
@@ -158,12 +158,10 @@ def classify_article(
     global _API_AUTH_FAILED
 
     if not settings.anthropic_api_key or _API_AUTH_FAILED:
-        reason = (
-            "ANTHROPIC_API_KEY missing"
-            if not settings.anthropic_api_key
-            else "Anthropic authentication previously failed"
-        )
-        logger.warning("%s — using offline classification", reason)
+        if not settings.anthropic_api_key:
+            logger.warning(
+                "ANTHROPIC_API_KEY missing — using offline classification"
+            )
         return classify_offline(
             titulo=titulo,
             resumen=resumen,
@@ -232,23 +230,47 @@ def classify_article(
     raise RuntimeError("Classification failed for all models")
 
 
-def classify_pending(limit: int = 50, delay_seconds: float = 0.2) -> dict[str, int]:
+def classify_pending(
+    limit: int = 50,
+    delay_seconds: float = 0.2,
+    *,
+    report_filter: ReportFilter | None = None,
+    since_iso: str | None = None,
+    date_by_publication: bool = False,
+) -> dict[str, int]:
     stats = {"classified": 0, "failed": 0, "remaining": 0}
     use_api = bool(settings.anthropic_api_key)
+    conditions = ["a.procesado = 0"]
+    params: list[object] = []
+    if since_iso:
+        date_col = (
+            "COALESCE(NULLIF(a.fecha_publicacion, ''), a.fecha_ingesta)"
+            if date_by_publication
+            else "a.fecha_ingesta"
+        )
+        conditions.append(f"{date_col} >= ?")
+        params.append(since_iso)
+    if report_filter and report_filter.pais:
+        conditions.append("m.pais = ?")
+        params.append(report_filter.pais)
+    elif report_filter and report_filter.region:
+        conditions.append("m.region = ?")
+        params.append(report_filter.region)
+    where_clause = " AND ".join(conditions)
 
     with get_connection() as conn:
         rows = conn.execute(
-            """
+            f"""
             SELECT a.id, a.titulo_original, a.resumen_raw, a.categoria, a.idioma,
                    a.fecha_publicacion, m.nombre AS medio_nombre,
                    m.categoria_default, m.tier AS medio_tier
             FROM articulos a
             JOIN medios m ON m.id = a.medio_id
-            WHERE a.procesado = 0
+            WHERE {where_clause}
             ORDER BY a.fecha_ingesta DESC
             LIMIT ?
             """,
-            (limit,),
+            (*params, limit),
         ).fetchall()
 
         for i, row in enumerate(rows):
@@ -289,7 +311,12 @@ def classify_pending(limit: int = 50, delay_seconds: float = 0.2) -> dict[str, i
                 stats["failed"] += 1
 
         remaining = conn.execute(
-            "SELECT COUNT(*) FROM articulos WHERE procesado = 0"
+            f"""
+            SELECT COUNT(*) FROM articulos a
+            JOIN medios m ON m.id = a.medio_id
+            WHERE {where_clause}
+            """,
+            params,
         ).fetchone()[0]
         stats["remaining"] = remaining
 
@@ -301,6 +328,9 @@ def classify_all_pending(
     batch_size: int = 30,
     max_batches: int = 20,
     delay_seconds: float = 0.2,
+    report_filter: ReportFilter | None = None,
+    since_iso: str | None = None,
+    date_by_publication: bool = False,
 ) -> dict[str, int]:
     """Classify all pending articles in batches (for informe / cierre)."""
     totals = {"classified": 0, "failed": 0, "remaining": 0, "batches": 0}
@@ -308,6 +338,9 @@ def classify_all_pending(
         stats = classify_pending(
             limit=batch_size,
             delay_seconds=delay_seconds,
+            report_filter=report_filter,
+            since_iso=since_iso,
+            date_by_publication=date_by_publication,
         )
         totals["batches"] += 1
         totals["classified"] += stats["classified"]

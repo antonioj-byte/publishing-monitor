@@ -12,7 +12,6 @@ from db.connection import get_connection, init_schema
 from medios_tiers import get_tier
 from reports.paises import get_pais_for_medio
 
-# Medios known to need scraping instead of broken/generic RSS
 # Medios whose primary RSS is broken; scraping used as fallback.
 # Paywalled medios (FT, WSJ, Times, WaPo, Globe, Granta) use dedicated RSS
 # alternatives in medios.csv — see ingest/paywall_alternatives.py
@@ -115,10 +114,10 @@ def load_medios(csv_path: Path | None = None) -> dict[str, int]:
 
         conn.commit()
 
-    with get_connection() as conn:
-        fallbacks = apply_scrape_fallbacks(conn)
-        conn.commit()
-    stats["scrape_fallbacks"] = fallbacks
+    # The CSV is the source of truth for the preferred method. Runtime ingest
+    # falls back to scraping when an RSS feed is empty or unavailable; do not
+    # permanently overwrite healthy RSS methods here.
+    stats["scrape_fallbacks"] = 0
 
     return stats
 

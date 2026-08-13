@@ -26,6 +26,7 @@ class Medio:
     idioma: str
     region: Region
     pais: str
+    tier: int
     activo: bool
 
 

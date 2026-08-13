@@ -12,7 +12,12 @@ from tempfile import TemporaryDirectory
 from unittest.mock import patch
 
 from bot.config import settings
-from reports.generator import _apply_report_limits, _fetch_articles
+from reports.generator import (
+    _apply_report_limits,
+    _build_pages,
+    _fetch_articles,
+    split_message,
+)
 
 
 def _article(article_id: int, score: int) -> dict:
@@ -41,6 +46,37 @@ class ReportLimitTests(unittest.TestCase):
             limited = _apply_report_limits(articles)
 
         self.assertEqual([item["id"] for item in limited], [1, 2, 5, 6, 9])
+
+    def test_oversized_first_article_advances_pagination_cursor(self) -> None:
+        article = {
+            "id": 1,
+            "titulo_original": "A" * 500,
+            "titular_traducido": None,
+            "resumen_generado": "B" * 500,
+            "resumen_raw": None,
+            "idioma": "es",
+            "url": "https://example.com/article",
+            "categoria": "noticias",
+            "relevance_score": 4,
+            "medio_nombre": "Publishers Weekly",
+            "medio_tier": 1,
+        }
+        _, ids, cursor, has_more, _ = _build_pages(
+            mode="informe",
+            report_filter=None,
+            since=datetime.fromisoformat("2026-08-13T00:00:00+00:00"),
+            include_sent=False,
+            ordered_articles=[article],
+            trends=[],
+            max_words=1,
+        )
+        self.assertEqual(ids, [1])
+        self.assertEqual(cursor, 1)
+        self.assertFalse(has_more)
+
+    def test_split_message_hard_splits_single_oversized_block(self) -> None:
+        chunks = split_message("x" * 9000, max_len=4000)
+        self.assertEqual([len(chunk) for chunk in chunks], [4000, 4000, 1000])
 
 
 class ContinuationFetchTests(unittest.TestCase):
