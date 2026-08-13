@@ -2,44 +2,54 @@
 
 Bot local que ingiere RSS y scraping de medios culturales/editoriales, clasifica con Claude y envía un informe diario por Telegram.
 
+## Inicio rápido
+
+```bash
+chmod +x scripts/setup.sh deploy/*.sh
+./scripts/setup.sh
+```
+
+Edita `.env` con tus claves, luego:
+
+```bash
+python scripts/get_telegram_chat_id.py   # tras enviar /start al bot
+python scripts/run_ingest_once.py
+python scripts/reclassify_all.py --yes     # reclasifica todo con Claude
+python scripts/print_report.py             # vista previa
+python -m bot.main                         # arrancar
+```
+
+## Configuración (`.env`)
+
+Copia la plantilla:
+
+```bash
+cp .env.example .env
+```
+
+| Variable | Dónde obtenerla |
+|----------|-----------------|
+| `ANTHROPIC_API_KEY` | [console.anthropic.com](https://console.anthropic.com/) → API Keys |
+| `TELEGRAM_BOT_TOKEN` | Telegram → @BotFather → `/newbot` |
+| `TELEGRAM_CHAT_ID` | Envía `/start` al bot → `python scripts/get_telegram_chat_id.py` |
+
 ## Requisitos
 
 - Python 3.11+
 - Cuenta Anthropic (API key)
-- Bot de Telegram (`TELEGRAM_BOT_TOKEN` + `TELEGRAM_CHAT_ID`)
+- Bot de Telegram
 
-## Setup
+## Scripts útiles
 
-```bash
-python -m venv .venv
-source .venv/bin/activate
-pip install -r requirements.txt
-cp .env.example .env
-# Editar .env con tus claves
-```
-
-## Inicialización
-
-```bash
-python scripts/init_db.py
-python scripts/load_medios.py
-```
-
-## Uso manual
-
-```bash
-# Ingesta única
-python scripts/run_ingest_once.py
-
-# Validar deduplicación (2 pasadas)
-python scripts/validate_ingest.py
-
-# Clasificar pendientes
-python scripts/classify_pending.py
-
-# Ver informe de prueba
-python scripts/print_report.py
-```
+| Comando | Descripción |
+|---------|-------------|
+| `scripts/setup.sh` | Instala deps, init DB, carga medios |
+| `scripts/run_ingest_once.py` | Ingesta manual de todos los medios |
+| `scripts/classify_pending.py` | Clasifica solo artículos nuevos |
+| `scripts/reclassify_all.py --yes` | Reset + reclasifica **todos** con Claude |
+| `scripts/print_report.py` | Informe de prueba en terminal |
+| `scripts/get_telegram_chat_id.py` | Obtiene tu chat ID de Telegram |
+| `scripts/test_paywall_feeds.py` | Verifica feeds alternativos (FT, WSJ, etc.) |
 
 ## Bot + scheduler
 
@@ -53,10 +63,25 @@ Tareas programadas (hora `Europe/Madrid`):
 - **Cierre**: 06:00 (ingesta + clasificación)
 - **Informe automático**: 06:30
 
-Comandos Telegram:
+Comandos Telegram: `/informe`, `/informe_hoy`, `/start`
 
-- `/informe` — desde último cierre o últimas 24h
-- `/informe_hoy` — solo lo recopilado hoy
+## Arranque automático
+
+**Linux (systemd):**
+
+```bash
+./deploy/install-systemd.sh
+sudo journalctl -u editorial-bot -f
+```
+
+**macOS (LaunchAgent):**
+
+```bash
+./deploy/install-launchd.sh
+tail -f data/bot.log
+```
+
+El servicio lee variables desde `.env` (macOS vía `deploy/run-bot.sh` generado en la instalación).
 
 ## Estructura
 

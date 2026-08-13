@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import logging
 import re
+import time
 from dataclasses import dataclass
 
 import anthropic
@@ -134,8 +135,9 @@ def classify_article(
     raise RuntimeError("Classification failed for all models")
 
 
-def classify_pending(limit: int = 50) -> dict[str, int]:
+def classify_pending(limit: int = 50, delay_seconds: float = 0.2) -> dict[str, int]:
     stats = {"classified": 0, "failed": 0, "remaining": 0}
+    use_api = bool(settings.anthropic_api_key)
 
     with get_connection() as conn:
         rows = conn.execute(
@@ -151,7 +153,9 @@ def classify_pending(limit: int = 50) -> dict[str, int]:
             (limit,),
         ).fetchall()
 
-        for row in rows:
+        for i, row in enumerate(rows):
+            if use_api and i > 0 and delay_seconds > 0:
+                time.sleep(delay_seconds)
             try:
                 result = classify_article(
                     titulo=row["titulo_original"],

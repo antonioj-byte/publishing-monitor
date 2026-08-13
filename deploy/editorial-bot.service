@@ -1,0 +1,19 @@
+[Unit]
+Description=Bot editorial Telegram (ingesta + informe diario)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+WorkingDirectory=__PROJECT_DIR__
+EnvironmentFile=__PROJECT_DIR__/.env
+ExecStart=__PYTHON__ -m bot.main
+Restart=on-failure
+RestartSec=30
+
+# Logs visibles con: journalctl -u editorial-bot -f
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target
