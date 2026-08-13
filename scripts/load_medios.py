@@ -11,14 +11,17 @@ from bot.config import MEDIOS_CSV
 from db.connection import get_connection, init_schema
 
 # Medios known to need scraping instead of broken/generic RSS
+# Medios whose primary RSS is broken; scraping used as fallback.
+# Paywalled medios (FT, WSJ, Times, WaPo, Globe, Granta) use dedicated RSS
+# alternatives in medios.csv — see ingest/paywall_alternatives.py
 SCRAPE_FALLBACK_NAMES = {
     "Livres Hebdo", "El País Uruguay Cultura", "El Universal Cultura", "Esprit",
-    "Financial Times Books", "Focus Kultur", "Folha de S.Paulo Ilustrada", "Gatopardo",
-    "Granta", "L'Espresso Cultura", "La Nouvelle Revue Française", "La Presse Arts",
+    "Focus Kultur", "Folha de S.Paulo Ilustrada", "Gatopardo",
+    "L'Espresso Cultura", "La Nouvelle Revue Française", "La Presse Arts",
     "La Stampa Cultura", "La Tercera Cultura", "Le Débat", "Le Point Culture",
     "Le Soir Culture", "Le Temps Culture", "Lettre International", "Newsweek",
     "Nuovi Argomenti", "Panorama Cultura", "Revista de Occidente", "Sinn und Form",
-    "The Believer", "The Globe and Mail Books", "Anfibia", "El Malpensante",
+    "The Believer", "Anfibia", "El Malpensante",
     "Il Mulino", "Jot Down", "La Maleta de Portbou", "Les Temps Modernes",
     "Letras Libres", "Merkur", "MicroMega", "Nexos", "The Threepenny Review", "XXI",
 }

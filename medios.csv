@@ -20,8 +20,8 @@ La Stampa Cultura,https://www.lastampa.it/cultura/,https://www.lastampa.it/rss/c
 Il Sole 24 Ore Cultura,https://www.ilsole24ore.com/art/cultura,https://www.ilsole24ore.com/rss/cultura.xml,,rss,noticias,it,eu,true
 Il Fatto Quotidiano Cultura,https://www.ilfattoquotidiano.it/cultura/,https://www.ilfattoquotidiano.it/cultura/feed/,,rss,noticias,it,eu,true
 The Guardian Books,https://www.theguardian.com/books,https://www.theguardian.com/books/rss,,rss,noticias,en,uk,true
-The Times Books,https://www.thetimes.co.uk/culture/books,,https://www.thetimes.co.uk/culture/books,scraping,noticias,en,uk,true
-Financial Times Books,https://www.ft.com/books,,https://www.ft.com/books,scraping,noticias,en,uk,true
+The Times Books,https://www.thetimes.com/culture/books,https://news.google.com/rss/search?q=site:thetimes.com+culture+books+review&hl=en-GB&gl=GB&ceid=GB:en,,rss,noticias,en,uk,true
+Financial Times Books,https://www.ft.com/books,https://www.ft.com/books?format=rss,,rss,noticias,en,uk,true
 The Telegraph Books,https://www.telegraph.co.uk/books/,https://www.telegraph.co.uk/books/rss.xml,,rss,noticias,en,uk,true
 Neue Zürcher Zeitung Kultur,https://www.nzz.ch/feuilleton,https://www.nzz.ch/feuilleton.rss,,rss,noticias,de,eu,true
 Le Temps Culture,https://www.letemps.ch/culture,https://www.letemps.ch/rss/culture,,rss,noticias,fr,eu,true
@@ -29,12 +29,12 @@ Le Soir Culture,https://www.lesoir.be/culture,https://www.lesoir.be/rss/culture,
 Der Standard Kultur,https://www.derstandard.at/kultur,https://www.derstandard.at/rss/kultur,,rss,noticias,de,eu,true
 Die Presse Kultur,https://www.diepresse.com/kultur,https://www.diepresse.com/rss/kultur,,rss,noticias,de,eu,true
 NYT Books,https://www.nytimes.com/section/books,https://rss.nytimes.com/services/xml/rss/nyt/Books.xml,,rss,noticias,en,us,true
-Washington Post Books,https://www.washingtonpost.com/entertainment/books/,https://feeds.washingtonpost.com/rss/entertainment/books,,rss,noticias,en,us,true
-Wall Street Journal Books,https://www.wsj.com/arts-culture/books,,https://www.wsj.com/arts-culture/books,scraping,noticias,en,us,true
+Washington Post Books,https://www.washingtonpost.com/entertainment/books/,https://news.google.com/rss/search?q=site:washingtonpost.com/entertainment/books&hl=en-US&gl=US&ceid=US:en,,rss,noticias,en,us,true
+Wall Street Journal Books,https://www.wsj.com/arts-culture/books,https://news.google.com/rss/search?q=site:wsj.com+book+review&hl=en-US&gl=US&ceid=US:en,,rss,noticias,en,us,true
 Los Angeles Times Books,https://www.latimes.com/entertainment-arts/books,https://www.latimes.com/entertainment-arts/books/rss2.0.xml,,rss,noticias,en,us,true
 Boston Globe Books,https://www.bostonglobe.com/arts/books/,https://www.bostonglobe.com/arts/books/?p1=BGHeader_RSS,,rss,noticias,en,us,true
 Chicago Tribune Books,https://www.chicagotribune.com/entertainment/books/,https://www.chicagotribune.com/entertainment/books/rss2.0.xml,,rss,noticias,en,us,true
-The Globe and Mail Books,https://www.theglobeandmail.com/arts/books/,https://www.theglobeandmail.com/arts/books/rss/,,rss,noticias,en,ca,true
+The Globe and Mail Books,https://www.theglobeandmail.com/arts/books/,https://news.google.com/rss/search?q=site:theglobeandmail.com/arts/books&hl=en-CA&gl=CA&ceid=CA:en,,rss,noticias,en,ca,true
 National Post Books,https://nationalpost.com/category/arts/books,,https://nationalpost.com/category/arts/books,scraping,noticias,en,ca,true
 La Presse Arts,https://www.lapresse.ca/arts/,https://www.lapresse.ca/arts/rss.xml,,rss,noticias,fr,ca,true
 La Nación Libros,https://www.lanacion.com.ar/lifestyle/libros/,https://www.lanacion.com.ar/arc/outboundfeeds/rss/category/lifestyle/libros/,,rss,noticias,es,latam,true
@@ -59,7 +59,7 @@ The Paris Review,https://www.theparisreview.org/blog,https://www.theparisreview.
 Harper's Magazine,https://harpers.org,https://harpers.org/feed/,,rss,ideas,en,us,true
 The Atlantic,https://www.theatlantic.com,https://www.theatlantic.com/feed/all/,,rss,ideas,en,us,true
 London Review of Books,https://www.lrb.co.uk,https://www.lrb.co.uk/feeds/rss,,rss,ideas,en,uk,true
-Granta,https://granta.com,https://granta.com/feed/,,rss,ideas,en,uk,true
+Granta,https://granta.com,https://grantamag.substack.com/feed,,rss,ideas,en,uk,true
 n+1,https://www.nplusonemag.com,https://www.nplusonemag.com/feed/,,rss,ideas,en,us,true
 The Believer,https://www.thebeliever.net,https://www.thebeliever.net/feed/,,rss,ideas,en,us,true
 The Threepenny Review,https://www.threepennyreview.com,https://www.threepennyreview.com/feed/,,rss,ideas,en,us,true

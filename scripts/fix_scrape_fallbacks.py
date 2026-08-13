@@ -7,48 +7,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from db.connection import get_connection
-
-# Medios where RSS failed during ingest validation
-SCRAPE_FALLBACK = [
-    "Livres Hebdo",
-    "El País Uruguay Cultura",
-    "El Universal Cultura",
-    "Esprit",
-    "Financial Times Books",
-    "Focus Kultur",
-    "Folha de S.Paulo Ilustrada",
-    "Gatopardo",
-    "Granta",
-    "L'Espresso Cultura",
-    "La Nouvelle Revue Française",
-    "La Presse Arts",
-    "La Stampa Cultura",
-    "La Tercera Cultura",
-    "Le Débat",
-    "Le Point Culture",
-    "Le Soir Culture",
-    "Le Temps Culture",
-    "Lettre International",
-    "Newsweek",
-    "Nuovi Argomenti",
-    "Panorama Cultura",
-    "Revista de Occidente",
-    "Sinn und Form",
-    "The Believer",
-    "The Globe and Mail Books",
-    "Anfibia",
-    "El Malpensante",
-    "Il Mulino",
-    "Jot Down",
-    "La Maleta de Portbou",
-    "Les Temps Modernes",
-    "Letras Libres",
-    "Merkur",
-    "MicroMega",
-    "Nexos",
-    "The Threepenny Review",
-    "XXI",
-]
+from scripts.load_medios import SCRAPE_FALLBACK_NAMES as SCRAPE_FALLBACK
 
 
 def main() -> None:
