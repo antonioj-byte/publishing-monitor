@@ -64,8 +64,7 @@ def load_medios(csv_path: Path | None = None) -> dict[str, int]:
                 metodo = row["metodo"].strip()
                 activo = row.get("activo", "true").strip().lower() in ("true", "1", "yes")
                 categoria_default = row["categoria_default"].strip()
-                tier_raw = row.get("tier", "").strip()
-                tier = int(tier_raw) if tier_raw in ("1", "2") else get_tier(nombre, categoria_default)
+                tier = get_tier(nombre, categoria_default)
                 pais_raw = row.get("pais", "").strip()
                 pais = pais_raw if pais_raw else get_pais_for_medio(nombre)
 

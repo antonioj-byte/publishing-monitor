@@ -44,10 +44,11 @@ class ReportResult:
 
 
 def _relevance_tiers() -> list[tuple[int, str, int]]:
+    """Report sections by article relevance score (NOT media tier)."""
     return [
-        (5, "🔥 Destacado", settings.max_destacados),
-        (4, "📌 Relevante", settings.max_relevantes),
-        (3, "📋 Señales secundarias", settings.max_secundarios),
+        (5, "🔥 Destacado (score 5)", settings.max_destacados),
+        (4, "📌 Relevante (score 4)", settings.max_relevantes),
+        (3, "📋 Secundarias (score 3)", settings.max_secundarios),
     ]
 
 
@@ -206,7 +207,17 @@ def _format_trends_section(trends: list[dict], max_trends: int = 5) -> list[str]
 
     lines = ["📡 En varios medios", ""]
     for trend in trends[:max_trends]:
-        medios = ", ".join(sorted(m for m in trend["medios"] if m))
+        medios_parts: list[str] = []
+        seen: set[str] = set()
+        for item in trend["articles"]:
+            name = item.get("medio_nombre", "")
+            if not name or name in seen:
+                continue
+            seen.add(name)
+            tier_num = item.get("medio_tier") or 2
+            medios_parts.append(f"{name} (T{tier_num})")
+        medios_parts.sort()
+        medios = ", ".join(medios_parts)
         label = trend["topic_label"].replace("|", " · ")
         score_note = ""
         if trend.get("event_score") is not None:
@@ -224,15 +235,20 @@ def _format_trends_section(trends: list[dict], max_trends: int = 5) -> list[str]
 def _header_lines(mode: str, report_filter: ReportFilter | None, now: datetime) -> list[str]:
     date_str = now.strftime("%d/%m/%Y")
     if mode == "informe_pais" and report_filter:
-        return [
+        lines = [
             f"📋 Informe — {report_filter.location_label} "
             f"(últimos {report_filter.days} días) — {date_str}"
         ]
-    if mode == "informe_hoy":
-        return [f"📋 Informe de hoy — {date_str}"]
-    if mode == "informe_mas":
-        return [f"📋 Informe (continuación) — {date_str}"]
-    return [f"📋 Informe editorial — {date_str}"]
+    elif mode == "informe_hoy":
+        lines = [f"📋 Informe de hoy — {date_str}"]
+    elif mode == "informe_mas":
+        lines = [f"📋 Informe (continuación) — {date_str}"]
+    else:
+        lines = [f"📋 Informe editorial — {date_str}"]
+    lines.append(
+        "_Tier 1/2 = autoridad del medio · Destacado/Relevante = prioridad del artículo_"
+    )
+    return lines
 
 
 def _append_within_word_limit(
