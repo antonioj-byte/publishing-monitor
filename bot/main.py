@@ -11,7 +11,7 @@ from apscheduler.triggers.cron import CronTrigger
 from telegram.ext import Application, CommandHandler, MessageHandler, filters
 from zoneinfo import ZoneInfo
 
-from ai.classify import classify_pending
+from ai.classify import classify_all_pending
 from bot.config import settings
 from bot.telegram_handlers import (
     free_text_report,
@@ -23,7 +23,8 @@ from bot.telegram_handlers import (
 )
 from db.connection import init_schema
 from ingest.runner import ingest_all
-from reports.generator import build_report, record_informe, split_message
+from reports.generator import record_informe, split_message
+from reports.pipeline import build_editorial_report
 
 logging.basicConfig(
     level=logging.INFO,
@@ -40,7 +41,7 @@ async def job_ingest() -> None:
 
 async def job_classify() -> None:
     logger.info("Starting scheduled classification")
-    stats = await asyncio.to_thread(classify_pending, 30)
+    stats = await asyncio.to_thread(classify_all_pending)
     logger.info("Classification done: %s", stats)
 
 
@@ -54,7 +55,11 @@ async def job_informe_automatico(app: Application) -> None:
     logger.info("Starting automatic report")
     await job_cierre()
 
-    report = await asyncio.to_thread(build_report, "informe")
+    report = await asyncio.to_thread(
+        build_editorial_report,
+        "informe",
+        classify_before_report=False,
+    )
     chat_id = settings.telegram_chat_id
     if not chat_id:
         logger.error("TELEGRAM_CHAT_ID not set")

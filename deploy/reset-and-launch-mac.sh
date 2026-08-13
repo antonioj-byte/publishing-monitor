@@ -65,8 +65,11 @@ if [[ "$DO_RECLASSIFY" -eq 1 ]]; then
   echo "→ Reclasificar artículos (puede tardar; usa API Anthropic)"
   python3 scripts/reclassify_all.py --yes
 else
-  echo "→ (Omitido reclassify; añade --reclassify si quieres reaplicar criterios)"
+  echo "→ (Omitido reclassify; añade --reclassify para reaplicar criterios y tiers)"
 fi
+
+echo "→ Diagnóstico pipeline"
+python3 scripts/diagnose_pipeline.py
 
 echo "→ Parar instancias anteriores del bot"
 launchctl bootout "gui/$(id -u)/$LABEL" 2>/dev/null || true
