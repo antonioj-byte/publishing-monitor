@@ -10,17 +10,18 @@ from dataclasses import dataclass
 
 import anthropic
 
+from ai.editorial_filter import is_editorial_scope
 from bot.config import EDITORIAL_CRITERIA, settings
 from db.connection import get_connection
 from db.models import Categoria
-from medios_tiers import tier_label
+from medios_tiers import get_tier, tier_label
 
 logger = logging.getLogger(__name__)
 
 MODEL = "claude-sonnet-4-20250514"
 FALLBACK_MODEL = "claude-3-5-haiku-20241022"
 
-SYSTEM_PROMPT_BASE = """Eres editor de un informe diario sobre cultura, literatura y el mundo editorial.
+SYSTEM_PROMPT_BASE = """Eres editor de un informe diario EXCLUSIVAMENTE sobre libros, literatura, autores y la industria editorial (editoriales, librerías, derechos, traducciones, ferias del libro, premios literarios).
 
 Para cada artículo recibirás titular, resumen, fuente, tier del medio, fecha de publicación, categoría prevista e idioma.
 
@@ -28,30 +29,46 @@ Responde SOLO con JSON válido:
 {
   "categoria": "ideas" | "noticias",
   "relevance_score": number,
+  "en_alcance": boolean,
   "resumen_generado": string,
   "titular_traducido": string
 }
 
+Alcance editorial (en_alcance = true) — INCLUIR:
+- Libros, novelas, poesía, ensayo literario o cultural con eje en libros/lectura
+- Industria editorial: editoriales, imprentas, distribución, derechos, traducciones, ventas
+- Autores, premios literarios, ferias del libro, reseñas de libros
+- Debate literario, canon, crítica literaria, memoria editorial
+
+Fuera de alcance (en_alcance = false) — EXCLUIR aunque el medio sea Tier 1:
+- Música, conciertos, álbumes, festivales musicales
+- Cine, series, TV, streaming, estrenos audiovisuales
+- Deportes, moda, gastronomía, videojuegos, tecnología general
+- Cultura general sin vínculo claro con libros, lectura o industria editorial
+- Política, economía o sociedad sin ángulo editorial/literario
+
 Reglas de categoría:
-- "ideas": ensayos, crónicas largas, reportajes de fondo, reflexión cultural.
-- "noticias": actualidad, novedades, reseñas breves, industria editorial.
+- "ideas": ensayos, crónicas largas, reportajes de fondo, reflexión literaria o cultural con eje libros.
+- "noticias": actualidad editorial, novedades, reseñas breves, industria.
 
 Reglas de traducción (OBLIGATORIO):
 - resumen_generado: SIEMPRE 2-4 líneas en castellano (español de España), aunque el original esté en otro idioma.
 - titular_traducido: SIEMPRE titular claro en castellano. Si el original ya está en español, reescríbelo más claro si hace falta; nunca devuelvas null.
 
 Reglas de relevance_score (1-5):
+- Si en_alcance es false → relevance_score MÁXIMO 2 (normalmente 1).
 - 5 = destacado: pieza imprescindible del día (ensayo de fondo, reportaje clave, noticia editorial de alto impacto)
-- 4 = relevante: merece lectura, buen contexto cultural/editorial
+- 4 = relevante: merece lectura, buen contexto literario/editorial
 - 3 = secundario: interesante pero no prioritario
 - 2 = marginal: poco relevante para el informe
-- 1 = ruido: descartar (farándula, relleno, off-topic)
+- 1 = ruido: descartar
 
-Factores que suben el score:
-- Medio Tier 1 (cabeceras de referencia): suele merecer 4-5 si el contenido es sólido; Tier 2 parte de 3.
-- Actualidad: prioriza piezas recientes y libros/eventos de las últimas semanas; contenido antiguo sin gancho → score más bajo.
+Factores que suben el score (solo si en_alcance = true):
+- Medio Tier 1: suele merecer 4-5 si el contenido es sólido; Tier 2 parte de 3.
+- Actualidad: prioriza piezas recientes sobre libros/eventos editoriales recientes.
 
-Sé exigente con los 5: no más del 15% de artículos deberían ser 5."""
+Sé exigente con los 5: no más del 15% de artículos deberían ser 5.
+Sé estricto con en_alcance: ante la duda sobre música/cine/cultura general, marca false."""
 
 
 def _load_system_prompt() -> str:
@@ -69,6 +86,7 @@ class ClassificationResult:
     relevance_score: int
     resumen_generado: str
     titular_traducido: str | None
+    en_alcance: bool = True
 
 
 def _parse_response(text: str) -> ClassificationResult:
@@ -80,11 +98,15 @@ def _parse_response(text: str) -> ClassificationResult:
     if categoria not in ("ideas", "noticias"):
         raise ValueError(f"Invalid categoria: {categoria}")
     titular = str(data.get("titular_traducido", "")).strip() or None
+    en_alcance = bool(data.get("en_alcance", True))
+    if not en_alcance:
+        score = min(score, 2)
     return ClassificationResult(
         categoria=categoria,
         relevance_score=score,
         resumen_generado=str(data["resumen_generado"]).strip(),
         titular_traducido=titular,
+        en_alcance=en_alcance,
     )
 
 
@@ -158,7 +180,21 @@ def classify_article(
                 messages=[{"role": "user", "content": user_msg}],
             )
             block = next(b for b in response.content if b.type == "text")
-            return _parse_response(block.text)
+            result = _parse_response(block.text)
+            if not is_editorial_scope(
+                titulo=titulo,
+                titular_traducido=result.titular_traducido,
+                resumen=resumen,
+                resumen_generado=result.resumen_generado,
+            ):
+                result = ClassificationResult(
+                    categoria=result.categoria,
+                    relevance_score=min(result.relevance_score, 2),
+                    resumen_generado=result.resumen_generado,
+                    titular_traducido=result.titular_traducido,
+                    en_alcance=False,
+                )
+            return result
         except anthropic.AuthenticationError as exc:
             raise RuntimeError(
                 "ANTHROPIC_API_KEY inválida o revocada. "
@@ -203,7 +239,7 @@ def classify_pending(limit: int = 50, delay_seconds: float = 0.2) -> dict[str, i
                     medio=row["medio_nombre"],
                     categoria_default=row["categoria_default"],
                     idioma=row["idioma"],
-                    medio_tier=row["medio_tier"] or 2,
+                    medio_tier=get_tier(row["medio_nombre"], row["categoria_default"]),
                     fecha_publicacion=row["fecha_publicacion"],
                 )
                 conn.execute(
