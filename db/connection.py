@@ -19,6 +19,10 @@ def _migrate_schema(conn: sqlite3.Connection) -> None:
         conn.execute(
             "ALTER TABLE medios ADD COLUMN tier INTEGER NOT NULL DEFAULT 2 CHECK (tier IN (1, 2))"
         )
+    if "pais" not in cols:
+        conn.execute(
+            "ALTER TABLE medios ADD COLUMN pais TEXT NOT NULL DEFAULT 'xx'"
+        )
 
 
 def init_schema() -> None:

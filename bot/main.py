@@ -8,12 +8,18 @@ import sys
 
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.cron import CronTrigger
-from telegram.ext import Application, CommandHandler
+from telegram.ext import Application, CommandHandler, MessageHandler, filters
 from zoneinfo import ZoneInfo
 
 from ai.classify import classify_pending
 from bot.config import settings
-from bot.telegram_handlers import informe_command, informe_hoy_command, start_command
+from bot.telegram_handlers import (
+    free_text_report,
+    informe_command,
+    informe_hoy_command,
+    paises_command,
+    start_command,
+)
 from db.connection import init_schema
 from ingest.runner import ingest_all
 from reports.generator import build_report, record_informe, split_message
@@ -117,6 +123,13 @@ def build_application() -> Application:
     app.add_handler(CommandHandler("start", start_command))
     app.add_handler(CommandHandler("informe", informe_command))
     app.add_handler(CommandHandler("informe_hoy", informe_hoy_command))
+    app.add_handler(CommandHandler("paises", paises_command))
+    app.add_handler(
+        MessageHandler(
+            filters.TEXT & ~filters.COMMAND,
+            free_text_report,
+        )
+    )
     return app
 
 

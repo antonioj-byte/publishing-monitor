@@ -9,7 +9,7 @@ from zoneinfo import ZoneInfo
 
 from bot.config import settings
 from db.connection import get_connection
-from db.models import Categoria
+from db.models import Categoria, ReportFilter
 from reports.trends import boost_trend_scores, find_cross_media_trends
 
 CATEGORY_HEADERS: dict[Categoria, str] = {
@@ -49,12 +49,16 @@ def _last_cierre() -> datetime | None:
     return datetime.fromisoformat(row["fecha_cierre"])
 
 
-def _fetch_articles(since: datetime, include_sent: bool = False) -> list[dict]:
+def _fetch_articles(
+    since: datetime,
+    include_sent: bool = False,
+    report_filter: ReportFilter | None = None,
+) -> list[dict]:
     min_score = settings.min_relevance_score
     query = """
         SELECT a.id, a.titulo_original, a.titular_traducido, a.resumen_generado,
-               a.url, a.categoria, a.relevance_score, m.region, m.nombre AS medio_nombre,
-               m.tier AS medio_tier
+               a.url, a.categoria, a.relevance_score, m.region, m.pais,
+               m.nombre AS medio_nombre, m.tier AS medio_tier
         FROM articulos a
         JOIN medios m ON m.id = a.medio_id
         WHERE a.procesado = 1
@@ -62,6 +66,13 @@ def _fetch_articles(since: datetime, include_sent: bool = False) -> list[dict]:
           AND a.fecha_ingesta >= ?
     """
     params: list = [min_score, since.astimezone(ZoneInfo("UTC")).isoformat()]
+    if report_filter:
+        if report_filter.pais:
+            query += " AND m.pais = ?"
+            params.append(report_filter.pais)
+        elif report_filter.region:
+            query += " AND m.region = ?"
+            params.append(report_filter.region)
     if not include_sent:
         query += " AND a.enviado = 0"
     query += " ORDER BY a.relevance_score DESC, a.categoria, a.fecha_ingesta DESC"
@@ -123,10 +134,17 @@ def _apply_tier_limits(articles: list[dict]) -> tuple[list[dict], bool]:
     return selected, truncated
 
 
-def build_report(mode: str = "informe") -> ReportResult:
+def build_report(
+    mode: str = "informe",
+    report_filter: ReportFilter | None = None,
+) -> ReportResult:
     now = _tz_now()
 
-    if mode == "informe_hoy":
+    if report_filter and report_filter.days:
+        since = now - timedelta(days=report_filter.days)
+        include_sent = True
+        mode = "informe_pais"
+    elif mode == "informe_hoy":
         since = now.replace(hour=0, minute=0, second=0, microsecond=0)
         include_sent = True
     else:
@@ -134,7 +152,9 @@ def build_report(mode: str = "informe") -> ReportResult:
         since = last if last else now - timedelta(hours=24)
         include_sent = False
 
-    articles = _fetch_articles(since, include_sent=include_sent)
+    articles = _fetch_articles(
+        since, include_sent=include_sent, report_filter=report_filter
+    )
     total_matched = len(articles)
     trends = find_cross_media_trends(articles)
     articles = boost_trend_scores(articles, trends)
@@ -144,7 +164,12 @@ def build_report(mode: str = "informe") -> ReportResult:
     article_ids: list[int] = []
 
     date_str = now.strftime("%d/%m/%Y")
-    if mode == "informe_hoy":
+    if mode == "informe_pais" and report_filter:
+        lines.append(
+            f"📋 Informe — {report_filter.location_label} "
+            f"(últimos {report_filter.days} días) — {date_str}"
+        )
+    elif mode == "informe_hoy":
         lines.append(f"📋 Informe de hoy — {date_str}")
     else:
         lines.append(f"📋 Informe editorial — {date_str}")
@@ -159,7 +184,13 @@ def build_report(mode: str = "informe") -> ReportResult:
         lines.extend(trend_lines)
 
     if not articles:
-        lines.append("_No hay artículos que cumplan los criterios en este periodo._")
+        if mode == "informe_pais" and report_filter:
+            lines.append(
+                f"_No hay artículos de {report_filter.location_label} "
+                f"en los últimos {report_filter.days} días._"
+            )
+        else:
+            lines.append("_No hay artículos que cumplan los criterios en este periodo._")
         return ReportResult(
             text="\n".join(lines), article_ids=[], mode=mode,
             truncated=False, total_matched=total_matched,

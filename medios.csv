@@ -1,98 +1,98 @@
-nombre,url_site,url_rss,url_scraping,metodo,categoria_default,idioma,region,activo,tier
-Publishers Weekly,https://www.publishersweekly.com/pw/by-topic/industry-news,,https://www.publishersweekly.com/pw/by-topic/industry-news,scraping,noticias,en,us,true,2
-The Bookseller,https://www.thebookseller.com,,https://www.thebookseller.com/news,scraping,noticias,en,uk,true,2
-Publishing Perspectives,https://publishingperspectives.com,https://publishingperspectives.com/feed,,rss,noticias,en,us,true,2
-Livres Hebdo,https://www.livreshebdo.fr,https://www.livreshebdo.fr/feed,,rss,noticias,fr,eu,true,2
-El País Babelia,https://elpais.com/babelia/,https://feeds.elpais.com/mrss-s/pages/ep/site/elpais.com/section/babelia/portada,,rss,noticias,es,eu,true,1
-El Mundo Cultura,https://www.elmundo.es/cultura.html,https://e00-elmundo.uecdn.es/elmundo/rss/cultura.xml,,rss,noticias,es,eu,true,2
-La Vanguardia Cultura,https://www.lavanguardia.com/cultura,https://www.lavanguardia.com/rss/cultura.xml,,rss,noticias,es,eu,true,2
-ABC Cultura,https://www.abc.es/cultura/,https://www.abc.es/rss/feeds/abc_Cultura.xml,,rss,noticias,es,eu,true,2
-Cinco Días Cultura,https://cincodias.elpais.com/cultura/,,https://cincodias.elpais.com/cultura/,scraping,noticias,es,eu,true,2
-Le Monde Livres,https://www.lemonde.fr/livres/,https://www.lemonde.fr/livres/rss_full.xml,,rss,noticias,fr,eu,true,1
-Le Figaro Livres,https://www.lefigaro.fr/livres,https://www.lefigaro.fr/rss/figaro_culture.xml,,rss,noticias,fr,eu,true,2
-Libération Livres,https://www.liberation.fr/culture/livres/,https://www.liberation.fr/arc/outboundfeeds/rss/category/culture/livres/,,rss,noticias,fr,eu,true,2
-FAZ Feuilleton,https://www.faz.net/aktuell/feuilleton/,https://www.faz.net/rss/aktuell/feuilleton/,,rss,noticias,de,eu,true,1
-Süddeutsche Kultur,https://www.sueddeutsche.de/kultur,https://rss.sueddeutsche.de/rss/Kultur,,rss,noticias,de,eu,true,2
-Die Welt Kultur,https://www.welt.de/kultur/,https://www.welt.de/feeds/section/kultur.rss,,rss,noticias,de,eu,true,2
-Corriere Cultura,https://www.corriere.it/cultura/,https://www.corriere.it/rss/cultura.xml,,rss,noticias,it,eu,true,2
-La Repubblica Cultura,https://www.repubblica.it/cultura/,https://www.repubblica.it/rss/cultura/rss2.0.xml,,rss,noticias,it,eu,true,2
-La Stampa Cultura,https://www.lastampa.it/cultura/,https://www.lastampa.it/rss/cultura.xml,,rss,noticias,it,eu,true,2
-Il Sole 24 Ore Cultura,https://www.ilsole24ore.com/art/cultura,https://www.ilsole24ore.com/rss/cultura.xml,,rss,noticias,it,eu,true,2
-Il Fatto Quotidiano Cultura,https://www.ilfattoquotidiano.it/cultura/,https://www.ilfattoquotidiano.it/cultura/feed/,,rss,noticias,it,eu,true,2
-The Guardian Books,https://www.theguardian.com/books,https://www.theguardian.com/books/rss,,rss,noticias,en,uk,true,1
-The Times Books,https://www.thetimes.com/culture/books,https://news.google.com/rss/search?q=site:thetimes.com+culture+books+review&hl=en-GB&gl=GB&ceid=GB:en,,rss,noticias,en,uk,true,2
-Financial Times Books,https://www.ft.com/books,https://www.ft.com/books?format=rss,,rss,noticias,en,uk,true,1
-The Telegraph Books,https://www.telegraph.co.uk/books/,https://www.telegraph.co.uk/books/rss.xml,,rss,noticias,en,uk,true,2
-Neue Zürcher Zeitung Kultur,https://www.nzz.ch/feuilleton,https://www.nzz.ch/feuilleton.rss,,rss,noticias,de,eu,true,1
-Le Temps Culture,https://www.letemps.ch/culture,https://www.letemps.ch/rss/culture,,rss,noticias,fr,eu,true,2
-Le Soir Culture,https://www.lesoir.be/culture,https://www.lesoir.be/rss/culture,,rss,noticias,fr,eu,true,2
-Der Standard Kultur,https://www.derstandard.at/kultur,https://www.derstandard.at/rss/kultur,,rss,noticias,de,eu,true,2
-Die Presse Kultur,https://www.diepresse.com/kultur,https://www.diepresse.com/rss/kultur,,rss,noticias,de,eu,true,2
-NYT Books,https://www.nytimes.com/section/books,https://rss.nytimes.com/services/xml/rss/nyt/Books.xml,,rss,noticias,en,us,true,1
-Washington Post Books,https://www.washingtonpost.com/entertainment/books/,https://news.google.com/rss/search?q=site:washingtonpost.com/entertainment/books&hl=en-US&gl=US&ceid=US:en,,rss,noticias,en,us,true,2
-Wall Street Journal Books,https://www.wsj.com/arts-culture/books,https://news.google.com/rss/search?q=site:wsj.com+book+review&hl=en-US&gl=US&ceid=US:en,,rss,noticias,en,us,true,2
-Los Angeles Times Books,https://www.latimes.com/entertainment-arts/books,https://www.latimes.com/entertainment-arts/books/rss2.0.xml,,rss,noticias,en,us,true,2
-Boston Globe Books,https://www.bostonglobe.com/arts/books/,https://www.bostonglobe.com/arts/books/?p1=BGHeader_RSS,,rss,noticias,en,us,true,2
-Chicago Tribune Books,https://www.chicagotribune.com/entertainment/books/,https://www.chicagotribune.com/entertainment/books/rss2.0.xml,,rss,noticias,en,us,true,2
-The Globe and Mail Books,https://www.theglobeandmail.com/arts/books/,https://news.google.com/rss/search?q=site:theglobeandmail.com/arts/books&hl=en-CA&gl=CA&ceid=CA:en,,rss,noticias,en,ca,true,2
-National Post Books,https://nationalpost.com/category/arts/books,,https://nationalpost.com/category/arts/books,scraping,noticias,en,ca,true,2
-La Presse Arts,https://www.lapresse.ca/arts/,https://www.lapresse.ca/arts/rss.xml,,rss,noticias,fr,ca,true,2
-La Nación Libros,https://www.lanacion.com.ar/lifestyle/libros/,https://www.lanacion.com.ar/arc/outboundfeeds/rss/category/lifestyle/libros/,,rss,noticias,es,latam,true,2
-Clarín Cultura,https://www.clarin.com/cultura/,https://www.clarin.com/rss/cultura/,,rss,noticias,es,latam,true,2
-Reforma Cultura,https://www.reforma.com/cultura/,https://www.reforma.com/rss/cultura.xml,,rss,noticias,es,latam,true,2
-El Universal Cultura,https://www.eluniversal.com.mx/cultura/,https://www.eluniversal.com.mx/rss/cultura.xml,,rss,noticias,es,latam,true,2
-El Mercurio Cultura,https://www.elmercurio.com/cultura,,https://www.elmercurio.com/cultura,scraping,noticias,es,latam,true,2
-La Tercera Cultura,https://www.latercera.com/culto/,https://www.latercera.com/culto/feed/,,rss,noticias,es,latam,true,2
-El Tiempo Cultura,https://www.eltiempo.com/cultura,https://www.eltiempo.com/rss/cultura.xml,,rss,noticias,es,latam,true,2
-El Espectador Libros,https://www.elespectador.com/el-espectador-libros/,https://www.elespectador.com/el-espectador-libros/rss.xml,,rss,noticias,es,latam,true,2
-El Comercio Cultura,https://elcomercio.pe/cultura/,https://elcomercio.pe/arc/outboundfeeds/rss/category/cultura/,,rss,noticias,es,latam,true,2
-El País Uruguay Cultura,https://www.elpais.com.uy/cultura,https://www.elpais.com.uy/rss/cultura,,rss,noticias,es,latam,true,2
-Folha de S.Paulo Ilustrada,https://www1.folha.uol.com.br/ilustrada/,https://www1.folha.uol.com.br/ilustrada/index.rss,,rss,noticias,pt,latam,true,2
-O Globo Cultura,https://oglobo.globo.com/cultura/,https://oglobo.globo.com/cultura/rss.xml,,rss,noticias,pt,latam,true,2
-The Japan Times Culture,https://www.japantimes.co.jp/culture/,https://www.japantimes.co.jp/culture/feed/,,rss,noticias,en,apac,true,2
-Nikkei Asia Culture,https://asia.nikkei.com/Life-Arts/Arts,,https://asia.nikkei.com/Life-Arts/Arts,scraping,noticias,en,apac,true,2
-South China Morning Post Culture,https://www.scmp.com/lifestyle/arts-culture,https://www.scmp.com/rss/91/feed,,rss,noticias,en,apac,true,2
-The Hindu Books,https://www.thehindu.com/books/,https://www.thehindu.com/books/?service=rss,,rss,noticias,en,apac,true,2
-The New Yorker,https://www.newyorker.com,https://www.newyorker.com/feed/rss,,rss,ideas,en,us,true,1
-New York Review of Books,https://www.nybooks.com,https://www.nybooks.com/feed/,,rss,ideas,en,us,true,1
-The Paris Review,https://www.theparisreview.org/blog,https://www.theparisreview.org/blog/feed,,rss,ideas,en,us,true,1
-Harper's Magazine,https://harpers.org,https://harpers.org/feed/,,rss,ideas,en,us,true,1
-The Atlantic,https://www.theatlantic.com,https://www.theatlantic.com/feed/all/,,rss,ideas,en,us,true,1
-London Review of Books,https://www.lrb.co.uk,https://www.lrb.co.uk/feeds/rss,,rss,ideas,en,uk,true,1
-Granta,https://granta.com,https://grantamag.substack.com/feed,,rss,ideas,en,uk,true,1
-n+1,https://www.nplusonemag.com,https://www.nplusonemag.com/feed/,,rss,ideas,en,us,true,1
-The Believer,https://www.thebeliever.net,https://www.thebeliever.net/feed/,,rss,ideas,en,us,true,1
-The Threepenny Review,https://www.threepennyreview.com,https://www.threepennyreview.com/feed/,,rss,ideas,en,us,true,1
-Letras Libres,https://letraslibres.com,https://letraslibres.com/feed/,,rss,ideas,es,latam,true,1
-Revista de Occidente,https://www.revistadeoccidente.es,https://www.revistadeoccidente.es/feed/,,rss,ideas,es,eu,true,1
-Gatopardo,https://gatopardo.com,https://gatopardo.com/feed/,,rss,ideas,es,latam,true,1
-El Malpensante,https://www.elmalpensante.com,https://www.elmalpensante.com/feed/,,rss,ideas,es,latam,true,1
-Anfibia,https://anfibia.org,https://anfibia.org/feed/,,rss,ideas,es,latam,true,1
-Nexos,https://www.nexos.com.mx,https://www.nexos.com.mx/feed/,,rss,ideas,es,latam,true,1
-Jot Down,https://www.jotdown.es,https://www.jotdown.es/feed/,,rss,ideas,es,eu,true,1
-La Maleta de Portbou,https://www.lamaletadeportbou.com,https://www.lamaletadeportbou.com/feed/,,rss,ideas,es,eu,true,1
-Les Temps Modernes,https://www.tempsmodernes.net,https://www.tempsmodernes.net/feed/,,rss,ideas,fr,eu,true,1
-Esprit,https://www.esprit.presse.fr,https://www.esprit.presse.fr/feed/,,rss,ideas,fr,eu,true,1
-La Nouvelle Revue Française,https://www.nrf.fr,https://www.nrf.fr/feed/,,rss,ideas,fr,eu,true,1
-Le Débat,https://www.ledebactuel.fr,https://www.ledebactuel.fr/feed/,,rss,ideas,fr,eu,true,1
-XXI,https://www.revue21.fr,https://www.revue21.fr/feed/,,rss,ideas,fr,eu,true,1
-Nuovi Argomenti,https://www.nuoviargomenti.it,https://www.nuoviargomenti.it/feed/,,rss,ideas,it,eu,true,1
-MicroMega,https://www.micromega.net,https://www.micromega.net/feed/,,rss,ideas,it,eu,true,1
-Il Mulino,https://www.ilmulino.it,https://www.ilmulino.it/feed/,,rss,ideas,it,eu,true,1
-Merkur,https://www.merkur-zeitschrift.de,https://www.merkur-zeitschrift.de/feed/,,rss,ideas,de,eu,true,1
-Lettre International,https://www.lettreinternationale.com,https://www.lettreinternationale.com/feed/,,rss,ideas,de,eu,true,1
-Sinn und Form,https://www.sinn-und-form.de,https://www.sinn-und-form.de/feed/,,rss,ideas,de,eu,true,1
-The Economist Culture,https://www.economist.com/culture,https://www.economist.com/culture/rss.xml,,rss,noticias,en,uk,true,1
-Time,https://time.com,https://time.com/feed/,,rss,noticias,en,us,true,2
-Newsweek,https://www.newsweek.com,https://www.newsweek.com/rss,,rss,noticias,en,us,true,2
-Der Spiegel Kultur,https://www.spiegel.de/kultur/,https://www.spiegel.de/kultur/index.rss,,rss,noticias,de,eu,true,2
-Die Zeit Kultur,https://www.zeit.de/kultur/index,https://newsfeed.zeit.de/kultur/index,,rss,noticias,de,eu,true,1
-Focus Kultur,https://www.focus.de/kultur/,https://rss.focus.de/fol/XML/rss_folnews_kultur.xml,,rss,noticias,de,eu,true,2
-Stern Kultur,https://www.stern.de/kultur/,https://www.stern.de/feed/standard/kultur/,,rss,noticias,de,eu,true,2
-Courrier International,https://www.courrierinternational.com,https://www.courrierinternational.com/feed/all/rss.xml,,rss,noticias,fr,eu,true,1
-L'Obs Culture,https://www.nouvelobs.com/culture/,https://www.nouvelobs.com/culture/rss.xml,,rss,noticias,fr,eu,true,2
-Le Point Culture,https://www.lepoint.fr/culture/,https://www.lepoint.fr/culture/rss.xml,,rss,noticias,fr,eu,true,2
-L'Express Culture,https://www.lexpress.fr/culture/,https://www.lexpress.fr/rss/culture.xml,,rss,noticias,fr,eu,true,2
-Internazionale,https://www.internazionale.it,https://www.internazionale.it/sitemaps/rss.xml,,rss,noticias,it,eu,true,1
-L'Espresso Cultura,https://www.espresso.repubblica.it/cultura/,https://www.espresso.repubblica.it/cultura/rss,,rss,noticias,it,eu,true,2
-Panorama Cultura,https://www.panorama.it/cultura/,https://www.panorama.it/cultura/feed/,,rss,noticias,it,eu,true,2
+nombre,url_site,url_rss,url_scraping,metodo,categoria_default,idioma,region,pais,activo,tier
+Publishers Weekly,https://www.publishersweekly.com/pw/by-topic/industry-news,,https://www.publishersweekly.com/pw/by-topic/industry-news,scraping,noticias,en,us,us,true,2
+The Bookseller,https://www.thebookseller.com,,https://www.thebookseller.com/news,scraping,noticias,en,uk,gb,true,2
+Publishing Perspectives,https://publishingperspectives.com,https://publishingperspectives.com/feed,,rss,noticias,en,us,us,true,2
+Livres Hebdo,https://www.livreshebdo.fr,https://www.livreshebdo.fr/feed,,rss,noticias,fr,eu,fr,true,2
+El País Babelia,https://elpais.com/babelia/,https://feeds.elpais.com/mrss-s/pages/ep/site/elpais.com/section/babelia/portada,,rss,noticias,es,eu,es,true,1
+El Mundo Cultura,https://www.elmundo.es/cultura.html,https://e00-elmundo.uecdn.es/elmundo/rss/cultura.xml,,rss,noticias,es,eu,es,true,2
+La Vanguardia Cultura,https://www.lavanguardia.com/cultura,https://www.lavanguardia.com/rss/cultura.xml,,rss,noticias,es,eu,es,true,2
+ABC Cultura,https://www.abc.es/cultura/,https://www.abc.es/rss/feeds/abc_Cultura.xml,,rss,noticias,es,eu,es,true,2
+Cinco Días Cultura,https://cincodias.elpais.com/cultura/,,https://cincodias.elpais.com/cultura/,scraping,noticias,es,eu,es,true,2
+Le Monde Livres,https://www.lemonde.fr/livres/,https://www.lemonde.fr/livres/rss_full.xml,,rss,noticias,fr,eu,fr,true,1
+Le Figaro Livres,https://www.lefigaro.fr/livres,https://www.lefigaro.fr/rss/figaro_culture.xml,,rss,noticias,fr,eu,fr,true,2
+Libération Livres,https://www.liberation.fr/culture/livres/,https://www.liberation.fr/arc/outboundfeeds/rss/category/culture/livres/,,rss,noticias,fr,eu,fr,true,2
+FAZ Feuilleton,https://www.faz.net/aktuell/feuilleton/,https://www.faz.net/rss/aktuell/feuilleton/,,rss,noticias,de,eu,de,true,1
+Süddeutsche Kultur,https://www.sueddeutsche.de/kultur,https://rss.sueddeutsche.de/rss/Kultur,,rss,noticias,de,eu,de,true,2
+Die Welt Kultur,https://www.welt.de/kultur/,https://www.welt.de/feeds/section/kultur.rss,,rss,noticias,de,eu,de,true,2
+Corriere Cultura,https://www.corriere.it/cultura/,https://www.corriere.it/rss/cultura.xml,,rss,noticias,it,eu,it,true,2
+La Repubblica Cultura,https://www.repubblica.it/cultura/,https://www.repubblica.it/rss/cultura/rss2.0.xml,,rss,noticias,it,eu,it,true,2
+La Stampa Cultura,https://www.lastampa.it/cultura/,https://www.lastampa.it/rss/cultura.xml,,rss,noticias,it,eu,it,true,2
+Il Sole 24 Ore Cultura,https://www.ilsole24ore.com/art/cultura,https://www.ilsole24ore.com/rss/cultura.xml,,rss,noticias,it,eu,it,true,2
+Il Fatto Quotidiano Cultura,https://www.ilfattoquotidiano.it/cultura/,https://www.ilfattoquotidiano.it/cultura/feed/,,rss,noticias,it,eu,it,true,2
+The Guardian Books,https://www.theguardian.com/books,https://www.theguardian.com/books/rss,,rss,noticias,en,uk,gb,true,1
+The Times Books,https://www.thetimes.com/culture/books,https://news.google.com/rss/search?q=site:thetimes.com+culture+books+review&hl=en-GB&gl=GB&ceid=GB:en,,rss,noticias,en,uk,gb,true,2
+Financial Times Books,https://www.ft.com/books,https://www.ft.com/books?format=rss,,rss,noticias,en,uk,gb,true,1
+The Telegraph Books,https://www.telegraph.co.uk/books/,https://www.telegraph.co.uk/books/rss.xml,,rss,noticias,en,uk,gb,true,2
+Neue Zürcher Zeitung Kultur,https://www.nzz.ch/feuilleton,https://www.nzz.ch/feuilleton.rss,,rss,noticias,de,eu,ch,true,1
+Le Temps Culture,https://www.letemps.ch/culture,https://www.letemps.ch/rss/culture,,rss,noticias,fr,eu,ch,true,2
+Le Soir Culture,https://www.lesoir.be/culture,https://www.lesoir.be/rss/culture,,rss,noticias,fr,eu,be,true,2
+Der Standard Kultur,https://www.derstandard.at/kultur,https://www.derstandard.at/rss/kultur,,rss,noticias,de,eu,at,true,2
+Die Presse Kultur,https://www.diepresse.com/kultur,https://www.diepresse.com/rss/kultur,,rss,noticias,de,eu,at,true,2
+NYT Books,https://www.nytimes.com/section/books,https://rss.nytimes.com/services/xml/rss/nyt/Books.xml,,rss,noticias,en,us,us,true,1
+Washington Post Books,https://www.washingtonpost.com/entertainment/books/,https://news.google.com/rss/search?q=site:washingtonpost.com/entertainment/books&hl=en-US&gl=US&ceid=US:en,,rss,noticias,en,us,us,true,2
+Wall Street Journal Books,https://www.wsj.com/arts-culture/books,https://news.google.com/rss/search?q=site:wsj.com+book+review&hl=en-US&gl=US&ceid=US:en,,rss,noticias,en,us,us,true,2
+Los Angeles Times Books,https://www.latimes.com/entertainment-arts/books,https://www.latimes.com/entertainment-arts/books/rss2.0.xml,,rss,noticias,en,us,us,true,2
+Boston Globe Books,https://www.bostonglobe.com/arts/books/,https://www.bostonglobe.com/arts/books/?p1=BGHeader_RSS,,rss,noticias,en,us,us,true,2
+Chicago Tribune Books,https://www.chicagotribune.com/entertainment/books/,https://www.chicagotribune.com/entertainment/books/rss2.0.xml,,rss,noticias,en,us,us,true,2
+The Globe and Mail Books,https://www.theglobeandmail.com/arts/books/,https://news.google.com/rss/search?q=site:theglobeandmail.com/arts/books&hl=en-CA&gl=CA&ceid=CA:en,,rss,noticias,en,ca,ca,true,2
+National Post Books,https://nationalpost.com/category/arts/books,,https://nationalpost.com/category/arts/books,scraping,noticias,en,ca,ca,true,2
+La Presse Arts,https://www.lapresse.ca/arts/,https://www.lapresse.ca/arts/rss.xml,,rss,noticias,fr,ca,ca,true,2
+La Nación Libros,https://www.lanacion.com.ar/lifestyle/libros/,https://www.lanacion.com.ar/arc/outboundfeeds/rss/category/lifestyle/libros/,,rss,noticias,es,latam,ar,true,2
+Clarín Cultura,https://www.clarin.com/cultura/,https://www.clarin.com/rss/cultura/,,rss,noticias,es,latam,ar,true,2
+Reforma Cultura,https://www.reforma.com/cultura/,https://www.reforma.com/rss/cultura.xml,,rss,noticias,es,latam,mx,true,2
+El Universal Cultura,https://www.eluniversal.com.mx/cultura/,https://www.eluniversal.com.mx/rss/cultura.xml,,rss,noticias,es,latam,mx,true,2
+El Mercurio Cultura,https://www.elmercurio.com/cultura,,https://www.elmercurio.com/cultura,scraping,noticias,es,latam,cl,true,2
+La Tercera Cultura,https://www.latercera.com/culto/,https://www.latercera.com/culto/feed/,,rss,noticias,es,latam,cl,true,2
+El Tiempo Cultura,https://www.eltiempo.com/cultura,https://www.eltiempo.com/rss/cultura.xml,,rss,noticias,es,latam,co,true,2
+El Espectador Libros,https://www.elespectador.com/el-espectador-libros/,https://www.elespectador.com/el-espectador-libros/rss.xml,,rss,noticias,es,latam,co,true,2
+El Comercio Cultura,https://elcomercio.pe/cultura/,https://elcomercio.pe/arc/outboundfeeds/rss/category/cultura/,,rss,noticias,es,latam,pe,true,2
+El País Uruguay Cultura,https://www.elpais.com.uy/cultura,https://www.elpais.com.uy/rss/cultura,,rss,noticias,es,latam,uy,true,2
+Folha de S.Paulo Ilustrada,https://www1.folha.uol.com.br/ilustrada/,https://www1.folha.uol.com.br/ilustrada/index.rss,,rss,noticias,pt,latam,br,true,2
+O Globo Cultura,https://oglobo.globo.com/cultura/,https://oglobo.globo.com/cultura/rss.xml,,rss,noticias,pt,latam,br,true,2
+The Japan Times Culture,https://www.japantimes.co.jp/culture/,https://www.japantimes.co.jp/culture/feed/,,rss,noticias,en,apac,jp,true,2
+Nikkei Asia Culture,https://asia.nikkei.com/Life-Arts/Arts,,https://asia.nikkei.com/Life-Arts/Arts,scraping,noticias,en,apac,jp,true,2
+South China Morning Post Culture,https://www.scmp.com/lifestyle/arts-culture,https://www.scmp.com/rss/91/feed,,rss,noticias,en,apac,hk,true,2
+The Hindu Books,https://www.thehindu.com/books/,https://www.thehindu.com/books/?service=rss,,rss,noticias,en,apac,in,true,2
+The New Yorker,https://www.newyorker.com,https://www.newyorker.com/feed/rss,,rss,ideas,en,us,us,true,1
+New York Review of Books,https://www.nybooks.com,https://www.nybooks.com/feed/,,rss,ideas,en,us,us,true,1
+The Paris Review,https://www.theparisreview.org/blog,https://www.theparisreview.org/blog/feed,,rss,ideas,en,us,us,true,1
+Harper's Magazine,https://harpers.org,https://harpers.org/feed/,,rss,ideas,en,us,us,true,1
+The Atlantic,https://www.theatlantic.com,https://www.theatlantic.com/feed/all/,,rss,ideas,en,us,us,true,1
+London Review of Books,https://www.lrb.co.uk,https://www.lrb.co.uk/feeds/rss,,rss,ideas,en,uk,gb,true,1
+Granta,https://granta.com,https://grantamag.substack.com/feed,,rss,ideas,en,uk,gb,true,1
+n+1,https://www.nplusonemag.com,https://www.nplusonemag.com/feed/,,rss,ideas,en,us,us,true,1
+The Believer,https://www.thebeliever.net,https://www.thebeliever.net/feed/,,rss,ideas,en,us,us,true,1
+The Threepenny Review,https://www.threepennyreview.com,https://www.threepennyreview.com/feed/,,rss,ideas,en,us,us,true,1
+Letras Libres,https://letraslibres.com,https://letraslibres.com/feed/,,rss,ideas,es,latam,mx,true,1
+Revista de Occidente,https://www.revistadeoccidente.es,https://www.revistadeoccidente.es/feed/,,rss,ideas,es,eu,es,true,1
+Gatopardo,https://gatopardo.com,https://gatopardo.com/feed/,,rss,ideas,es,latam,mx,true,1
+El Malpensante,https://www.elmalpensante.com,https://www.elmalpensante.com/feed/,,rss,ideas,es,latam,co,true,1
+Anfibia,https://anfibia.org,https://anfibia.org/feed/,,rss,ideas,es,latam,ar,true,1
+Nexos,https://www.nexos.com.mx,https://www.nexos.com.mx/feed/,,rss,ideas,es,latam,mx,true,1
+Jot Down,https://www.jotdown.es,https://www.jotdown.es/feed/,,rss,ideas,es,eu,es,true,1
+La Maleta de Portbou,https://www.lamaletadeportbou.com,https://www.lamaletadeportbou.com/feed/,,rss,ideas,es,eu,es,true,1
+Les Temps Modernes,https://www.tempsmodernes.net,https://www.tempsmodernes.net/feed/,,rss,ideas,fr,eu,fr,true,1
+Esprit,https://www.esprit.presse.fr,https://www.esprit.presse.fr/feed/,,rss,ideas,fr,eu,fr,true,1
+La Nouvelle Revue Française,https://www.nrf.fr,https://www.nrf.fr/feed/,,rss,ideas,fr,eu,fr,true,1
+Le Débat,https://www.ledebactuel.fr,https://www.ledebactuel.fr/feed/,,rss,ideas,fr,eu,fr,true,1
+XXI,https://www.revue21.fr,https://www.revue21.fr/feed/,,rss,ideas,fr,eu,fr,true,1
+Nuovi Argomenti,https://www.nuoviargomenti.it,https://www.nuoviargomenti.it/feed/,,rss,ideas,it,eu,it,true,1
+MicroMega,https://www.micromega.net,https://www.micromega.net/feed/,,rss,ideas,it,eu,it,true,1
+Il Mulino,https://www.ilmulino.it,https://www.ilmulino.it/feed/,,rss,ideas,it,eu,it,true,1
+Merkur,https://www.merkur-zeitschrift.de,https://www.merkur-zeitschrift.de/feed/,,rss,ideas,de,eu,de,true,1
+Lettre International,https://www.lettreinternationale.com,https://www.lettreinternationale.com/feed/,,rss,ideas,de,eu,de,true,1
+Sinn und Form,https://www.sinn-und-form.de,https://www.sinn-und-form.de/feed/,,rss,ideas,de,eu,de,true,1
+The Economist Culture,https://www.economist.com/culture,https://www.economist.com/culture/rss.xml,,rss,noticias,en,uk,gb,true,1
+Time,https://time.com,https://time.com/feed/,,rss,noticias,en,us,us,true,2
+Newsweek,https://www.newsweek.com,https://www.newsweek.com/rss,,rss,noticias,en,us,us,true,2
+Der Spiegel Kultur,https://www.spiegel.de/kultur/,https://www.spiegel.de/kultur/index.rss,,rss,noticias,de,eu,de,true,2
+Die Zeit Kultur,https://www.zeit.de/kultur/index,https://newsfeed.zeit.de/kultur/index,,rss,noticias,de,eu,de,true,1
+Focus Kultur,https://www.focus.de/kultur/,https://rss.focus.de/fol/XML/rss_folnews_kultur.xml,,rss,noticias,de,eu,de,true,2
+Stern Kultur,https://www.stern.de/kultur/,https://www.stern.de/feed/standard/kultur/,,rss,noticias,de,eu,de,true,2
+Courrier International,https://www.courrierinternational.com,https://www.courrierinternational.com/feed/all/rss.xml,,rss,noticias,fr,eu,fr,true,1
+L'Obs Culture,https://www.nouvelobs.com/culture/,https://www.nouvelobs.com/culture/rss.xml,,rss,noticias,fr,eu,fr,true,2
+Le Point Culture,https://www.lepoint.fr/culture/,https://www.lepoint.fr/culture/rss.xml,,rss,noticias,fr,eu,fr,true,2
+L'Express Culture,https://www.lexpress.fr/culture/,https://www.lexpress.fr/rss/culture.xml,,rss,noticias,fr,eu,fr,true,2
+Internazionale,https://www.internazionale.it,https://www.internazionale.it/sitemaps/rss.xml,,rss,noticias,it,eu,it,true,1
+L'Espresso Cultura,https://www.espresso.repubblica.it/cultura/,https://www.espresso.repubblica.it/cultura/rss,,rss,noticias,it,eu,it,true,2
+Panorama Cultura,https://www.panorama.it/cultura/,https://www.panorama.it/cultura/feed/,,rss,noticias,it,eu,it,true,2
