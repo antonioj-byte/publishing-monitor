@@ -18,6 +18,7 @@ class Settings:
     max_destacados: int
     max_relevantes: int
     max_secundarios: int
+    max_report_words: int
     timezone: str
 
     @classmethod
@@ -32,6 +33,7 @@ class Settings:
             max_destacados=int(os.getenv("MAX_DESTACADOS", "8")),
             max_relevantes=int(os.getenv("MAX_RELEVANTES", "12")),
             max_secundarios=int(os.getenv("MAX_SECUNDARIOS", "10")),
+            max_report_words=int(os.getenv("MAX_REPORT_WORDS", "2500")),
             timezone=os.getenv("TIMEZONE", "Europe/Madrid"),
         )
 
