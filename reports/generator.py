@@ -85,11 +85,87 @@ def _resolve_window(
     return since, False, mode
 
 
+def _count_country_candidates(
+    report_filter: ReportFilter,
+    since: datetime,
+    *,
+    date_by_publication: bool,
+) -> tuple[int, int, int]:
+    """Return (classified relevant in window, pending, total for country/region)."""
+    since_iso = since.astimezone(ZoneInfo("UTC")).isoformat()
+    date_col = (
+        "COALESCE(a.fecha_publicacion, a.fecha_ingesta)"
+        if date_by_publication
+        else "a.fecha_ingesta"
+    )
+    geo = "m.pais = ?" if report_filter.pais else "m.region = ?"
+    geo_val = report_filter.pais or report_filter.region
+
+    with get_connection() as conn:
+        in_window = conn.execute(
+            f"""
+            SELECT COUNT(*) FROM articulos a
+            JOIN medios m ON m.id = a.medio_id
+            WHERE {geo} AND a.procesado = 1 AND a.relevance_score >= ?
+              AND {date_col} >= ?
+            """,
+            (geo_val, settings.min_relevance_score, since_iso),
+        ).fetchone()[0]
+        pending = conn.execute(
+            f"""
+            SELECT COUNT(*) FROM articulos a
+            JOIN medios m ON m.id = a.medio_id
+            WHERE {geo} AND a.procesado = 0 AND {date_col} >= ?
+            """,
+            (geo_val, since_iso),
+        ).fetchone()[0]
+        total_geo = conn.execute(
+            f"""
+            SELECT COUNT(*) FROM articulos a
+            JOIN medios m ON m.id = a.medio_id
+            WHERE {geo}
+            """,
+            (geo_val,),
+        ).fetchone()[0]
+    return in_window, pending, total_geo
+
+
+def _empty_country_message(
+    report_filter: ReportFilter,
+    since: datetime,
+    *,
+    date_by_publication: bool,
+) -> str:
+    in_window, pending, total_geo = _count_country_candidates(
+        report_filter, since, date_by_publication=date_by_publication
+    )
+    label = report_filter.location_label or "la zona"
+    lines = [
+        f"_No hay artículos editoriales de {label} "
+        f"en los últimos {report_filter.days} días._",
+        "",
+        f"En base de datos: {total_geo} artículos de {label}, "
+        f"{in_window} clasificados en ventana, {pending} pendientes de clasificar.",
+    ]
+    if pending:
+        lines.append("Espera a que termine la clasificación o ejecuta: `python3 scripts/classify_pending.py`")
+    elif total_geo == 0:
+        lines.append("No hay artículos ingeridos de ese país. Ejecuta: `python3 scripts/run_ingest_once.py`")
+    else:
+        lines.append(
+            f"Prueba un periodo más amplio: `/informe 7 {label.split()[0].lower()}` "
+            "o revisa el filtro editorial con `python3 scripts/diagnose_pipeline.py`."
+        )
+    return "\n".join(lines)
+
+
 def _fetch_articles(
     since: datetime,
     include_sent: bool = False,
     report_filter: ReportFilter | None = None,
     article_ids: list[int] | None = None,
+    *,
+    date_by_publication: bool = False,
 ) -> list[dict]:
     min_score = settings.min_relevance_score
     query = """
@@ -109,8 +185,12 @@ def _fetch_articles(
         query += f" AND a.id IN ({placeholders})"
         params.extend(article_ids)
     else:
-        query += " AND a.fecha_ingesta >= ?"
-        params.append(since.astimezone(ZoneInfo("UTC")).isoformat())
+        since_iso = since.astimezone(ZoneInfo("UTC")).isoformat()
+        if date_by_publication:
+            query += " AND COALESCE(a.fecha_publicacion, a.fecha_ingesta) >= ?"
+        else:
+            query += " AND a.fecha_ingesta >= ?"
+        params.append(since_iso)
 
     if report_filter:
         if report_filter.pais:
@@ -385,8 +465,12 @@ def build_report(
     else:
         since, include_sent, resolved_mode = _resolve_window(mode, report_filter)
         mode = resolved_mode
+        use_pub_date = mode in ("informe_pais", "informe_hoy")
         articles = _fetch_articles(
-            since, include_sent=include_sent, report_filter=report_filter
+            since,
+            include_sent=include_sent,
+            report_filter=report_filter,
+            date_by_publication=use_pub_date,
         )
         if not articles:
             now = _tz_now()
@@ -394,8 +478,11 @@ def build_report(
             lines.append("")
             if mode == "informe_pais" and report_filter:
                 lines.append(
-                    f"_No hay artículos de {report_filter.location_label} "
-                    f"en los últimos {report_filter.days} días._"
+                    _empty_country_message(
+                        report_filter,
+                        since,
+                        date_by_publication=use_pub_date,
+                    )
                 )
             else:
                 lines.append("_No hay artículos que cumplan los criterios en este periodo._")
