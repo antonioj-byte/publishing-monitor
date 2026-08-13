@@ -12,11 +12,11 @@ chmod +x scripts/setup.sh deploy/*.sh
 Edita `.env` con tus claves, luego:
 
 ```bash
-python scripts/get_telegram_chat_id.py   # tras enviar /start al bot
-python scripts/run_ingest_once.py
-python scripts/reclassify_all.py --yes     # reclasifica todo con Claude
-python scripts/print_report.py             # vista previa
-python -m bot.main                         # arrancar
+python3 scripts/get_telegram_chat_id.py   # tras enviar /start al bot
+python3 scripts/run_ingest_once.py
+python3 scripts/reclassify_all.py --yes     # reclasifica todo con Claude
+python3 scripts/print_report.py             # vista previa
+python3 -m bot.main                         # arrancar
 ```
 
 ## Configuración (`.env`)
