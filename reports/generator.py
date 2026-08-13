@@ -13,7 +13,7 @@ from bot.config import settings
 from db.connection import get_connection
 from db.models import Categoria, ReportFilter
 from reports.session import ReportSession, save_session
-from reports.trends import boost_trend_scores, find_cross_media_trends
+from reports.prioritize import events_to_trends, prioritize_articles
 
 CATEGORY_HEADERS: dict[Categoria, str] = {
     "ideas": "📚 Ideas del mundo editorial",
@@ -92,6 +92,7 @@ def _fetch_articles(
     query = """
         SELECT a.id, a.titulo_original, a.titular_traducido, a.resumen_generado,
                a.resumen_raw, a.idioma, a.url, a.categoria, a.relevance_score,
+               a.fecha_publicacion, a.fecha_ingesta,
                m.region, m.pais, m.nombre AS medio_nombre, m.tier AS medio_tier
         FROM articulos a
         JOIN medios m ON m.id = a.medio_id
@@ -133,15 +134,35 @@ def _fetch_articles(
 
 
 def _order_articles(articles: list[dict]) -> list[dict]:
-    """Order by category and relevance; length capped by word budget, not article count."""
+    """Order by event score, then category and relevance."""
     ordered: list[dict] = []
-    for categoria in ("ideas", "noticias"):
-        cat_items = [a for a in articles if a["categoria"] == categoria]
-        for score, _, _ in _relevance_tiers():
-            tier_items = [
-                a for a in cat_items if (a.get("relevance_score") or 3) == score
-            ]
-            ordered.extend(tier_items)
+    seen_event_ids: set[int] = set()
+    event_order: list[int] = []
+    for article in articles:
+        eid = article.get("event_id")
+        if eid is not None and eid not in seen_event_ids:
+            seen_event_ids.add(eid)
+            event_order.append(eid)
+
+    for event_id in event_order:
+        event_articles = [a for a in articles if a.get("event_id") == event_id]
+        for categoria in ("ideas", "noticias"):
+            cat_items = [a for a in event_articles if a["categoria"] == categoria]
+            for score, _, _ in _relevance_tiers():
+                tier_items = [
+                    a for a in cat_items if (a.get("relevance_score") or 3) == score
+                ]
+                ordered.extend(tier_items)
+
+    orphans = [a for a in articles if a.get("event_id") is None]
+    if orphans:
+        for categoria in ("ideas", "noticias"):
+            cat_items = [a for a in orphans if a["categoria"] == categoria]
+            for score, _, _ in _relevance_tiers():
+                tier_items = [
+                    a for a in cat_items if (a.get("relevance_score") or 3) == score
+                ]
+                ordered.extend(tier_items)
     return ordered
 
 
@@ -177,7 +198,12 @@ def _format_trends_section(trends: list[dict], max_trends: int = 5) -> list[str]
     for trend in trends[:max_trends]:
         medios = ", ".join(sorted(m for m in trend["medios"] if m))
         label = trend["topic_label"].replace("|", " · ")
-        lines.append(f"• _{label}_ — {len(trend['medios'])} medios: {medios}")
+        score_note = ""
+        if trend.get("event_score") is not None:
+            score_note = f" · puntuación {trend['event_score']:.2f}"
+        lines.append(f"• _{label}_{score_note} — {len(trend['medios'])} medios: {medios}")
+        if trend.get("event_explanation"):
+            lines.append(f"  _({trend['event_explanation']})_")
         lines.append("")
         for item in trend["articles"][:2]:
             lines.append(_format_entry(item))
@@ -336,7 +362,6 @@ def build_report(
         articles = _fetch_articles(
             since, include_sent=include_sent, report_filter=report_filter
         )
-        total_matched = len(articles)
         if not articles:
             now = _tz_now()
             lines = _header_lines(mode, report_filter, now)
@@ -355,9 +380,25 @@ def build_report(
                 total_matched=0,
             )
 
-        trends = find_cross_media_trends(articles)
-        boosted = boost_trend_scores(articles, trends)
-        ordered = _order_articles(boosted)
+        prioritization = prioritize_articles(articles)
+        total_matched = prioritization.total_input
+        if not prioritization.articles:
+            now = _tz_now()
+            lines = _header_lines(mode, report_filter, now)
+            lines.append("")
+            lines.append(
+                "_No hay eventos editoriales que superen el umbral de priorización "
+                f"({settings.prioritize_score_threshold:.2f}) en este periodo._"
+            )
+            return ReportResult(
+                text="\n".join(lines),
+                article_ids=[],
+                mode=mode,
+                total_matched=total_matched,
+            )
+
+        trends = events_to_trends(prioritization.events)
+        ordered = _order_articles(prioritization.articles)
         all_ids = [a["id"] for a in ordered]
         start_cursor = 0
         include_trends = True

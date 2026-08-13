@@ -35,19 +35,27 @@ TIER1_IDEAS = {
     "Sinn und Form",
 }
 
-# Cabeceras de prensa / semanarios con sección cultura-libros de alto perfil
+# Prensa especializada del sector editorial
 TIER1_PRENSA = {
+    "Publishers Weekly",
+    "The Bookseller",
+    "Publishing Perspectives",
+    "Livres Hebdo",
     "The Guardian Books",
     "NYT Books",
+    "Washington Post Books",
     "Le Monde Livres",
     "FAZ Feuilleton",
     "Neue Zürcher Zeitung Kultur",
     "Financial Times Books",
+    "El País Babelia",
+    "La Vanguardia Cultura",
+    "Corriere Cultura",
+    "La Repubblica Cultura",
     "Die Zeit Kultur",
     "Courrier International",
     "Internazionale",
     "The Economist Culture",
-    "El País Babelia",
 }
 
 TIER1_ALL = TIER1_IDEAS | TIER1_PRENSA
