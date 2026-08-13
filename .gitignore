@@ -8,5 +8,6 @@ __pycache__/
 venv/
 data/
 *.db
+deploy/run-bot.sh
 .DS_Store
 .pytest_cache/

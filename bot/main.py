@@ -91,9 +91,23 @@ def setup_scheduler(app: Application) -> AsyncIOScheduler:
     return scheduler
 
 
-def build_application() -> Application:
+def validate_settings() -> None:
+    missing = []
     if not settings.telegram_bot_token:
-        raise RuntimeError("Missing TELEGRAM_BOT_TOKEN")
+        missing.append("TELEGRAM_BOT_TOKEN")
+    if not settings.telegram_chat_id:
+        missing.append("TELEGRAM_CHAT_ID")
+    if missing:
+        raise RuntimeError(
+            "Faltan variables en .env: " + ", ".join(missing) + "\n"
+            "1. Crea bot con @BotFather → /newbot\n"
+            "2. Envía /start al bot\n"
+            "3. python3 scripts/get_telegram_chat_id.py"
+        )
+
+
+def build_application() -> Application:
+    validate_settings()
 
     app = (
         Application.builder()
@@ -112,7 +126,7 @@ async def main_async() -> None:
     scheduler = setup_scheduler(app)
     scheduler.start()
 
-    logger.info("Bot starting (timezone=%s)", settings.timezone)
+    logger.info("Bot starting (timezone=%s, chat_id=%s)", settings.timezone, settings.telegram_chat_id)
     async with app:
         await app.start()
         await app.updater.start_polling(drop_pending_updates=True)

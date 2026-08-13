@@ -51,11 +51,57 @@ cp .env.example .env
 | `scripts/get_telegram_chat_id.py` | Obtiene tu chat ID de Telegram |
 | `scripts/test_paywall_feeds.py` | Verifica feeds alternativos (FT, WSJ, etc.) |
 
+## Telegram — puesta en marcha
+
+### 1. Crear el bot
+
+1. Abre Telegram y busca **@BotFather**
+2. Envía `/newbot`
+3. Elige nombre y username (debe acabar en `bot`, p. ej. `informe_editorial_bot`)
+4. Copia el **token** → `.env`:
+   ```env
+   TELEGRAM_BOT_TOKEN=123456789:ABCdef...
+   ```
+
+### 2. Obtener tu chat ID
+
+1. Busca tu bot en Telegram y envía **`/start`**
+2. En el terminal:
+   ```bash
+   python3 scripts/get_telegram_chat_id.py
+   ```
+3. Copia el número → `.env`:
+   ```env
+   TELEGRAM_CHAT_ID=123456789
+   ```
+
+### 3. Probar conexión
+
+```bash
+python3 scripts/test_telegram.py
+```
+
+Deberías recibir un mensaje *"Bot editorial conectado"* en Telegram.
+
+### 4. Arrancar
+
+```bash
+python3 -m bot.main
+```
+
+Comandos en Telegram: `/start`, `/informe`, `/informe_hoy`
+
+Solo responde al `TELEGRAM_CHAT_ID` configurado (uso personal).
+
+Para dejarlo siempre activo en Mac: `./deploy/install-launchd.sh`
+
 ## Bot + scheduler
 
 ```bash
-python -m bot.main
+python3 -m bot.main
 ```
+
+> **Nota:** En Linux y en muchos Macs el comando es `python3`, no `python`. Si prefieres usar `python`, instala el alias (`brew install python` en Mac) o crea un venv: `python3 -m venv .venv && source .venv/bin/activate`.
 
 Tareas programadas (hora `Europe/Madrid`):
 
@@ -115,7 +161,7 @@ Detalle en [`ingest/paywall_alternatives.py`](ingest/paywall_alternatives.py).
 Verificar feeds:
 
 ```bash
-python scripts/test_paywall_feeds.py
+python3 scripts/test_paywall_feeds.py
 ```
 
 **Nota:** Los feeds de Google News enlazan vía `news.google.com` (redirección al artículo). Es la vía estándar cuando el medio no publica RSS público.

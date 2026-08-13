@@ -7,12 +7,20 @@ import logging
 from telegram import Update
 from telegram.ext import ContextTypes
 
+from bot.auth import is_authorized, unauthorized_message
 from reports.generator import build_report, record_informe, split_message
 
 logger = logging.getLogger(__name__)
 
 
 async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    if not update.message:
+        return
+    if not is_authorized(update):
+        await update.message.reply_text(
+            unauthorized_message(update.effective_chat.id if update.effective_chat else "?")
+        )
+        return
     await update.message.reply_text(
         "Bot editorial activo.\n\n"
         "Comandos:\n"
@@ -31,6 +39,12 @@ async def informe_hoy_command(update: Update, context: ContextTypes.DEFAULT_TYPE
 
 async def _send_report(update: Update, mode: str, record: bool) -> None:
     if not update.message:
+        return
+
+    if not is_authorized(update):
+        await update.message.reply_text(
+            unauthorized_message(update.effective_chat.id if update.effective_chat else "?")
+        )
         return
 
     await update.message.reply_text("Generando informe…")
