@@ -8,10 +8,12 @@ from dataclasses import dataclass
 from datetime import datetime, timedelta
 from zoneinfo import ZoneInfo
 
+from ai.editorial_filter import filter_editorial_scope
 from ai.translation import is_likely_untranslated
 from bot.config import settings
 from db.connection import get_connection
 from db.models import Categoria, ReportFilter
+from medios_tiers import get_tier, tier_label
 from reports.session import ReportSession, save_session
 from reports.prioritize import events_to_trends, prioritize_articles
 
@@ -126,6 +128,13 @@ def _fetch_articles(
         rows = conn.execute(query, params).fetchall()
     articles = [dict(r) for r in rows]
 
+    for article in articles:
+        article["medio_tier"] = get_tier(
+            article.get("medio_nombre", ""),
+        )
+
+    articles = filter_editorial_scope(articles)
+
     if article_ids:
         order = {aid: idx for idx, aid in enumerate(article_ids)}
         articles.sort(key=lambda a: order.get(a["id"], 999999))
@@ -184,8 +193,9 @@ def _format_entry(item: dict, *, show_tier: bool = False) -> str:
         resumen = item["resumen_generado"] or "(sin resumen)"
     medio = item.get("medio_nombre", "")
     tier_suffix = ""
-    if show_tier and item.get("medio_tier") == 1:
-        tier_suffix = " · Tier 1"
+    if show_tier:
+        tier_num = item.get("medio_tier") or 2
+        tier_suffix = f" · {tier_label(tier_num)}"
     source = f" — _{medio}{tier_suffix}_" if medio else ""
     return f"📰 {titular}{source}\n{resumen}\n🔗 {item['url']}"
 

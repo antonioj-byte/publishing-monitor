@@ -2,69 +2,43 @@
 
 from __future__ import annotations
 
-# Revistas de ideas, ensayo y crítica — referencia editorial
+# Revistas literarias / ensayo de referencia internacional (lista cerrada)
 TIER1_IDEAS = {
     "The New Yorker",
     "New York Review of Books",
     "The Paris Review",
-    "Harper's Magazine",
-    "The Atlantic",
     "London Review of Books",
-    "Granta",
-    "n+1",
-    "The Believer",
-    "The Threepenny Review",
-    "Letras Libres",
-    "Revista de Occidente",
-    "Gatopardo",
-    "El Malpensante",
-    "Anfibia",
-    "Nexos",
-    "Jot Down",
-    "La Maleta de Portbou",
-    "Les Temps Modernes",
-    "Esprit",
-    "La Nouvelle Revue Française",
-    "Le Débat",
-    "XXI",
-    "Nuovi Argomenti",
-    "MicroMega",
-    "Il Mulino",
-    "Merkur",
-    "Lettre International",
-    "Sinn und Form",
+    "Harper's Magazine",
 }
 
-# Prensa especializada del sector editorial
+# Prensa especializada + cabeceras generalistas con sección libros/cultura editorial
 TIER1_PRENSA = {
+    # Industria editorial
     "Publishers Weekly",
     "The Bookseller",
     "Publishing Perspectives",
     "Livres Hebdo",
-    "The Guardian Books",
-    "NYT Books",
-    "Washington Post Books",
-    "Le Monde Livres",
-    "FAZ Feuilleton",
-    "Neue Zürcher Zeitung Kultur",
-    "Financial Times Books",
+    # Generalistas — secciones libros / cultura editorial
     "El País Babelia",
     "La Vanguardia Cultura",
+    "Le Monde Livres",
+    "FAZ Feuilleton",
     "Corriere Cultura",
     "La Repubblica Cultura",
-    "Die Zeit Kultur",
-    "Courrier International",
-    "Internazionale",
-    "The Economist Culture",
+    "The Guardian Books",
+    "Financial Times Books",
+    "NYT Books",
+    "Washington Post Books",
+    "Neue Zürcher Zeitung Kultur",
 }
 
 TIER1_ALL = TIER1_IDEAS | TIER1_PRENSA
 
 
 def get_tier(nombre: str, categoria_default: str = "") -> int:
+    """Return canonical tier for a media outlet. Only explicit Tier 1 lists qualify."""
+    del categoria_default  # no blanket promotion by category
     if nombre in TIER1_ALL:
-        return 1
-    if categoria_default == "ideas":
         return 1
     return 2
 
