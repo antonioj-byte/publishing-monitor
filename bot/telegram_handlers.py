@@ -11,7 +11,8 @@ from telegram.ext import ContextTypes
 from bot.auth import is_authorized, unauthorized_message
 from bot.report_parser import parse_command_args, parse_free_text
 from db.models import ReportFilter
-from reports.generator import build_report, record_informe, split_message
+from reports.generator import record_informe, split_message
+from reports.pipeline import build_editorial_report
 from reports.paises import list_available_locations
 from reports.session import load_session
 
@@ -137,7 +138,7 @@ async def _send_continuation(update: Update) -> None:
 
     await update.message.reply_text("Generando continuación del informe…")
     try:
-        report = build_report(continuation=session, chat_id=chat_id)
+        report = build_editorial_report(continuation=session, chat_id=chat_id)
         for chunk in split_message(report.text):
             await update.message.reply_text(chunk, disable_web_page_preview=True)
         if not report.has_more and report.article_ids:
@@ -166,10 +167,14 @@ async def _send_report(
     label = ""
     if report_filter and report_filter.location_label:
         label = f" ({report_filter.location_label}, {report_filter.days} días)"
-    await update.message.reply_text(f"Generando informe{label}…")
+    await update.message.reply_text(f"Clasificando y generando informe{label}…")
 
     try:
-        report = build_report(mode=mode, report_filter=report_filter, chat_id=chat_id)
+        report = build_editorial_report(
+            mode=mode,
+            report_filter=report_filter,
+            chat_id=chat_id,
+        )
         chunks = split_message(report.text)
 
         for chunk in chunks:

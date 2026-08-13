@@ -118,6 +118,10 @@ def classify_offline(
     idioma: str,
 ) -> ClassificationResult:
     """Fallback when ANTHROPIC_API_KEY is not configured."""
+    in_scope = is_editorial_scope(
+        titulo=titulo,
+        resumen=resumen,
+    )
     if idioma != "es":
         summary = (
             "Resumen no disponible en castellano (clasificación offline). "
@@ -130,11 +134,13 @@ def classify_offline(
             summary = f"{titulo}. Artículo recopilado del feed del medio."
         titular = titulo
 
+    score = 3 if in_scope else 2
     return ClassificationResult(
         categoria=categoria_default,
-        relevance_score=3,
+        relevance_score=score,
         resumen_generado=summary,
         titular_traducido=titular if idioma != "es" else None,
+        en_alcance=in_scope,
     )
 
 
@@ -272,3 +278,25 @@ def classify_pending(limit: int = 50, delay_seconds: float = 0.2) -> dict[str, i
         stats["remaining"] = remaining
 
     return stats
+
+
+def classify_all_pending(
+    *,
+    batch_size: int = 30,
+    max_batches: int = 20,
+    delay_seconds: float = 0.2,
+) -> dict[str, int]:
+    """Classify all pending articles in batches (for informe / cierre)."""
+    totals = {"classified": 0, "failed": 0, "remaining": 0, "batches": 0}
+    for _ in range(max_batches):
+        stats = classify_pending(
+            limit=batch_size,
+            delay_seconds=delay_seconds,
+        )
+        totals["batches"] += 1
+        totals["classified"] += stats["classified"]
+        totals["failed"] += stats["failed"]
+        totals["remaining"] = stats["remaining"]
+        if stats["classified"] == 0 or stats["remaining"] == 0:
+            break
+    return totals
