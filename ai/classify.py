@@ -96,15 +96,23 @@ def classify_offline(
     idioma: str,
 ) -> ClassificationResult:
     """Fallback when ANTHROPIC_API_KEY is not configured."""
-    summary = (resumen or titulo)[:400]
-    if len(summary) < 20:
-        summary = f"{titulo}. Artículo recopilado del feed del medio."
-    titular = titulo if idioma == "es" else titulo
+    if idioma != "es":
+        summary = (
+            "Resumen no disponible en castellano (clasificación offline). "
+            "Configura ANTHROPIC_API_KEY y ejecuta reclassify_untranslated.py."
+        )
+        titular = f"[{idioma.upper()}] {titulo[:120]}"
+    else:
+        summary = (resumen or titulo)[:400]
+        if len(summary) < 20:
+            summary = f"{titulo}. Artículo recopilado del feed del medio."
+        titular = titulo
+
     return ClassificationResult(
         categoria=categoria_default,
         relevance_score=3,
         resumen_generado=summary,
-        titular_traducido=None if idioma == "es" else titular,
+        titular_traducido=titular if idioma != "es" else None,
     )
 
 

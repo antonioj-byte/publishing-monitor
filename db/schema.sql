@@ -43,3 +43,15 @@ CREATE TABLE IF NOT EXISTS informes (
     articulos_incluidos TEXT NOT NULL,
     enviado_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
+
+CREATE TABLE IF NOT EXISTS informe_sesiones (
+    chat_id TEXT PRIMARY KEY,
+    mode TEXT NOT NULL,
+    since_iso TEXT NOT NULL,
+    include_sent INTEGER NOT NULL DEFAULT 0,
+    report_filter TEXT,
+    article_ids TEXT NOT NULL,
+    cursor INTEGER NOT NULL DEFAULT 0,
+    trends_included INTEGER NOT NULL DEFAULT 0,
+    updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+);

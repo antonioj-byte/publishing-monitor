@@ -24,6 +24,29 @@ def _migrate_schema(conn: sqlite3.Connection) -> None:
             "ALTER TABLE medios ADD COLUMN pais TEXT NOT NULL DEFAULT 'xx'"
         )
 
+    tables = {
+        row[0]
+        for row in conn.execute(
+            "SELECT name FROM sqlite_master WHERE type='table'"
+        )
+    }
+    if "informe_sesiones" not in tables:
+        conn.execute(
+            """
+            CREATE TABLE informe_sesiones (
+                chat_id TEXT PRIMARY KEY,
+                mode TEXT NOT NULL,
+                since_iso TEXT NOT NULL,
+                include_sent INTEGER NOT NULL DEFAULT 0,
+                report_filter TEXT,
+                article_ids TEXT NOT NULL,
+                cursor INTEGER NOT NULL DEFAULT 0,
+                trends_included INTEGER NOT NULL DEFAULT 0,
+                updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+            )
+            """
+        )
+
 
 def init_schema() -> None:
     schema_path = Path(__file__).parent / "schema.sql"

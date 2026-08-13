@@ -17,6 +17,7 @@ from bot.telegram_handlers import (
     free_text_report,
     informe_command,
     informe_hoy_command,
+    informe_mas_command,
     paises_command,
     start_command,
 )
@@ -123,6 +124,7 @@ def build_application() -> Application:
     app.add_handler(CommandHandler("start", start_command))
     app.add_handler(CommandHandler("informe", informe_command))
     app.add_handler(CommandHandler("informe_hoy", informe_hoy_command))
+    app.add_handler(CommandHandler("informe_mas", informe_mas_command))
     app.add_handler(CommandHandler("paises", paises_command))
     app.add_handler(
         MessageHandler(
