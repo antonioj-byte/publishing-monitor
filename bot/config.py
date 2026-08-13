@@ -27,6 +27,9 @@ class Settings:
     prioritize_repetition_cap: int
     prioritize_similarity_threshold: float
     prioritize_same_medio_similarity_threshold: float
+    prioritize_generic_similarity_threshold: float
+    prioritize_max_cluster_size: int
+    prioritize_max_batch: int
     prioritize_score_threshold: float
     prioritize_recency_hours_full: float
     prioritize_recency_hours_partial: float
@@ -62,6 +65,11 @@ class Settings:
             prioritize_same_medio_similarity_threshold=float(
                 os.getenv("PRIORITIZE_SAME_MEDIO_SIMILARITY_THRESHOLD", "0.88")
             ),
+            prioritize_generic_similarity_threshold=float(
+                os.getenv("PRIORITIZE_GENERIC_SIMILARITY_THRESHOLD", "0.88")
+            ),
+            prioritize_max_cluster_size=int(os.getenv("PRIORITIZE_MAX_CLUSTER_SIZE", "8")),
+            prioritize_max_batch=int(os.getenv("PRIORITIZE_MAX_BATCH", "120")),
             prioritize_score_threshold=float(os.getenv("PRIORITIZE_SCORE_THRESHOLD", "0.45")),
             prioritize_recency_hours_full=float(os.getenv("PRIORITIZE_RECENCY_HOURS_FULL", "24")),
             prioritize_recency_hours_partial=float(os.getenv("PRIORITIZE_RECENCY_HOURS_PARTIAL", "48")),

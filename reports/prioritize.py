@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import re
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 from zoneinfo import ZoneInfo
@@ -14,6 +15,25 @@ from bot.config import settings
 logger = logging.getLogger(__name__)
 
 _EMBEDDER = None
+
+# Generic listicles share vocabulary ("best books 2026") and must not form mega-clusters.
+GENERIC_ROUNDUP_PATTERNS = (
+    r"\bbest books\b",
+    r"\bbooks of (?:the )?year\b",
+    r"\bbooks to read\b",
+    r"\bmust[- ]read\b",
+    r"\bwhat to read\b",
+    r"\breading list\b",
+    r"\blibros del (?:ano|año)\b",
+    r"\bmejores libros\b",
+    r"\bbest of \d{4}\b",
+    r"\bso far in \d{4}\b",
+    r"\b\d{4} so far\b",
+    r"\bsummer reads?\b",
+    r"\bwinter reads?\b",
+    r"\bspring reads?\b",
+    r"\bholiday reads?\b",
+)
 
 
 @dataclass(frozen=True)
@@ -105,10 +125,21 @@ def _compute_embeddings(texts: list[str]) -> np.ndarray:
     return matrix / norms
 
 
+def _article_title(article: dict) -> str:
+    return article.get("titular_traducido") or article.get("titulo_original") or ""
+
+
+def _is_generic_roundup(article: dict) -> bool:
+    text = _article_title(article).lower()
+    return any(re.search(pattern, text) for pattern in GENERIC_ROUNDUP_PATTERNS)
+
+
 def _merge_threshold(article_a: dict, article_b: dict, base_threshold: float) -> float:
     same_medio = (article_a.get("medio_nombre") or "") == (article_b.get("medio_nombre") or "")
     if same_medio and article_a.get("medio_nombre"):
         return settings.prioritize_same_medio_similarity_threshold
+    if _is_generic_roundup(article_a) or _is_generic_roundup(article_b):
+        return settings.prioritize_generic_similarity_threshold
     return base_threshold
 
 
@@ -143,6 +174,62 @@ def _union_find_clusters(
         groups.setdefault(root, []).append(idx)
 
     return list(groups.values())
+
+
+def _split_oversized_clusters(
+    groups: list[list[int]],
+    similarity: np.ndarray,
+    articles: list[dict],
+) -> list[list[int]]:
+    max_size = settings.prioritize_max_cluster_size
+    result: list[list[int]] = []
+
+    for group in groups:
+        if len(group) <= max_size:
+            result.append(group)
+            continue
+
+        sub_articles = [articles[i] for i in group]
+        sub_sim = similarity[np.ix_(group, group)]
+        strict = max(
+            settings.prioritize_generic_similarity_threshold,
+            settings.prioritize_similarity_threshold + 0.08,
+        )
+        sub_groups = _union_find_clusters(sub_sim, sub_articles, strict)
+
+        for sub_group in sub_groups:
+            mapped = [group[i] for i in sub_group]
+            if len(mapped) <= max_size:
+                result.append(mapped)
+            else:
+                result.extend([[idx] for idx in mapped])
+
+    return result
+
+
+def limit_batch_for_prioritization(articles: list[dict]) -> tuple[list[dict], int]:
+    """Cap batch size for embedding performance; prefer score, tier and recency."""
+    total = len(articles)
+    cap = settings.prioritize_max_batch
+    if total <= cap:
+        return articles, total
+
+    def sort_key(article: dict) -> tuple:
+        ts = _article_timestamp(article)
+        ts_ord = ts.timestamp() if ts else 0.0
+        return (
+            -(article.get("relevance_score") or 0),
+            -(article.get("medio_tier") or 2),
+            -ts_ord,
+        )
+
+    ranked = sorted(articles, key=sort_key)
+    logger.info(
+        "Prioritization batch capped: %d → %d articles (PRIORITIZE_MAX_BATCH)",
+        total,
+        cap,
+    )
+    return ranked[:cap], total
 
 
 def _distinct_medios(articles: list[dict]) -> list[dict]:
@@ -297,6 +384,7 @@ def cluster_articles(articles: list[dict]) -> list[list[dict]]:
     similarity = embeddings @ embeddings.T
     threshold = settings.prioritize_similarity_threshold
     index_groups = _union_find_clusters(similarity, articles, threshold)
+    index_groups = _split_oversized_clusters(index_groups, similarity, articles)
     return [[articles[i] for i in group] for group in index_groups]
 
 

@@ -59,6 +59,24 @@ class PrioritizeScoringTests(unittest.TestCase):
             _merge_threshold(a, c, 0.72),
         )
 
+    def test_generic_roundup_requires_higher_cross_media_threshold(self) -> None:
+        from reports.prioritize import _is_generic_roundup, _merge_threshold
+
+        generic = {
+            "medio_nombre": "NYT Books",
+            "titulo_original": "The Best Books of 2026 So Far",
+        }
+        other = {
+            "medio_nombre": "The Guardian Books",
+            "titulo_original": "Publishing merger announced",
+        }
+        self.assertTrue(_is_generic_roundup(generic))
+        self.assertFalse(_is_generic_roundup(other))
+        self.assertGreater(
+            _merge_threshold(generic, other, 0.72),
+            0.72,
+        )
+
     def test_event_explanation_includes_axes(self) -> None:
         now = datetime(2026, 8, 13, 12, 0, tzinfo=ZoneInfo("Europe/Madrid"))
         articles = [
