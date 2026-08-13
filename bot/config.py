@@ -26,6 +26,7 @@ class Settings:
     prioritize_weight_tier: float
     prioritize_repetition_cap: int
     prioritize_similarity_threshold: float
+    prioritize_same_medio_similarity_threshold: float
     prioritize_score_threshold: float
     prioritize_recency_hours_full: float
     prioritize_recency_hours_partial: float
@@ -57,8 +58,11 @@ class Settings:
             prioritize_weight_recency=float(os.getenv("PRIORITIZE_WEIGHT_RECENCY", "0.30")),
             prioritize_weight_tier=float(os.getenv("PRIORITIZE_WEIGHT_TIER", "0.35")),
             prioritize_repetition_cap=int(os.getenv("PRIORITIZE_REPETITION_CAP", "10")),
-            prioritize_similarity_threshold=float(os.getenv("PRIORITIZE_SIMILARITY_THRESHOLD", "0.68")),
-            prioritize_score_threshold=float(os.getenv("PRIORITIZE_SCORE_THRESHOLD", "0.35")),
+            prioritize_similarity_threshold=float(os.getenv("PRIORITIZE_SIMILARITY_THRESHOLD", "0.72")),
+            prioritize_same_medio_similarity_threshold=float(
+                os.getenv("PRIORITIZE_SAME_MEDIO_SIMILARITY_THRESHOLD", "0.88")
+            ),
+            prioritize_score_threshold=float(os.getenv("PRIORITIZE_SCORE_THRESHOLD", "0.45")),
             prioritize_recency_hours_full=float(os.getenv("PRIORITIZE_RECENCY_HOURS_FULL", "24")),
             prioritize_recency_hours_partial=float(os.getenv("PRIORITIZE_RECENCY_HOURS_PARTIAL", "48")),
             prioritize_recency_partial_score=float(os.getenv("PRIORITIZE_RECENCY_PARTIAL_SCORE", "0.55")),

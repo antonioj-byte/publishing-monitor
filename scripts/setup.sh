@@ -29,6 +29,7 @@ fi
 python3 scripts/init_db.py
 python3 scripts/load_medios.py
 python3 scripts/test_paywall_feeds.py
+python3 scripts/prewarm_embeddings.py
 
 echo ""
 echo "==> Setup base completado"
@@ -38,8 +39,9 @@ echo "  1. Edita .env con ANTHROPIC_API_KEY, TELEGRAM_BOT_TOKEN"
 echo "  2. Envía /start a tu bot → python scripts/get_telegram_chat_id.py"
 echo "  3. python scripts/run_ingest_once.py"
 echo "  4. python scripts/classify_pending.py   (o reclassify_all.py --yes)"
-echo "  5. python scripts/print_report.py       (vista previa)"
-echo "  6. python -m bot.main                   (arrancar bot)"
+echo "  5. python scripts/prioritize_batch.py   (calibrar eventos priorizados)"
+echo "  6. python scripts/print_report.py       (vista previa)"
+echo "  7. python -m bot.main                   (arrancar bot)"
 echo ""
 echo "Arranque automático:"
 echo "  Linux:  ./deploy/install-systemd.sh"

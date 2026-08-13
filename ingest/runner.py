@@ -32,6 +32,7 @@ def _row_to_medio(row) -> Medio:
         categoria_default=row["categoria_default"],
         idioma=row["idioma"],
         region=row["region"],
+        pais=row["pais"],
         activo=bool(row["activo"]),
     )
 

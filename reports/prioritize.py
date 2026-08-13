@@ -105,7 +105,18 @@ def _compute_embeddings(texts: list[str]) -> np.ndarray:
     return matrix / norms
 
 
-def _union_find_clusters(similarity: np.ndarray, threshold: float) -> list[list[int]]:
+def _merge_threshold(article_a: dict, article_b: dict, base_threshold: float) -> float:
+    same_medio = (article_a.get("medio_nombre") or "") == (article_b.get("medio_nombre") or "")
+    if same_medio and article_a.get("medio_nombre"):
+        return settings.prioritize_same_medio_similarity_threshold
+    return base_threshold
+
+
+def _union_find_clusters(
+    similarity: np.ndarray,
+    articles: list[dict],
+    threshold: float,
+) -> list[list[int]]:
     n = similarity.shape[0]
     parent = list(range(n))
 
@@ -122,7 +133,8 @@ def _union_find_clusters(similarity: np.ndarray, threshold: float) -> list[list[
 
     for i in range(n):
         for j in range(i + 1, n):
-            if similarity[i, j] >= threshold:
+            merge_at = _merge_threshold(articles[i], articles[j], threshold)
+            if similarity[i, j] >= merge_at:
                 union(i, j)
 
     groups: dict[int, list[int]] = {}
@@ -284,7 +296,7 @@ def cluster_articles(articles: list[dict]) -> list[list[dict]]:
 
     similarity = embeddings @ embeddings.T
     threshold = settings.prioritize_similarity_threshold
-    index_groups = _union_find_clusters(similarity, threshold)
+    index_groups = _union_find_clusters(similarity, articles, threshold)
     return [[articles[i] for i in group] for group in index_groups]
 
 

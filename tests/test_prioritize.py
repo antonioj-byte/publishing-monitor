@@ -48,6 +48,17 @@ class PrioritizeScoringTests(unittest.TestCase):
         self.assertGreaterEqual(score, 0.5)
         self.assertLess(score, 1.0)
 
+    def test_same_medio_requires_higher_similarity(self) -> None:
+        from reports.prioritize import _merge_threshold
+
+        a = {"medio_nombre": "NYT Books"}
+        b = {"medio_nombre": "NYT Books"}
+        c = {"medio_nombre": "The Guardian Books"}
+        self.assertGreater(
+            _merge_threshold(a, b, 0.72),
+            _merge_threshold(a, c, 0.72),
+        )
+
     def test_event_explanation_includes_axes(self) -> None:
         now = datetime(2026, 8, 13, 12, 0, tzinfo=ZoneInfo("Europe/Madrid"))
         articles = [

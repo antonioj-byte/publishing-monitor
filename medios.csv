@@ -1,11 +1,11 @@
 nombre,url_site,url_rss,url_scraping,metodo,categoria_default,idioma,region,pais,activo,tier
-Publishers Weekly,https://www.publishersweekly.com/pw/by-topic/industry-news,,https://www.publishersweekly.com/pw/by-topic/industry-news,scraping,noticias,en,us,us,true,2
-The Bookseller,https://www.thebookseller.com,,https://www.thebookseller.com/news,scraping,noticias,en,uk,gb,true,2
-Publishing Perspectives,https://publishingperspectives.com,https://publishingperspectives.com/feed,,rss,noticias,en,us,us,true,2
-Livres Hebdo,https://www.livreshebdo.fr,https://www.livreshebdo.fr/feed,,rss,noticias,fr,eu,fr,true,2
+Publishers Weekly,https://www.publishersweekly.com/pw/by-topic/industry-news,,https://www.publishersweekly.com/pw/by-topic/industry-news,scraping,noticias,en,us,us,true,1
+The Bookseller,https://www.thebookseller.com,,https://www.thebookseller.com/news,scraping,noticias,en,uk,gb,true,1
+Publishing Perspectives,https://publishingperspectives.com,https://publishingperspectives.com/feed,,rss,noticias,en,us,us,true,1
+Livres Hebdo,https://www.livreshebdo.fr,https://www.livreshebdo.fr/feed,,rss,noticias,fr,eu,fr,true,1
 El País Babelia,https://elpais.com/babelia/,https://feeds.elpais.com/mrss-s/pages/ep/site/elpais.com/section/babelia/portada,,rss,noticias,es,eu,es,true,1
 El Mundo Cultura,https://www.elmundo.es/cultura.html,https://e00-elmundo.uecdn.es/elmundo/rss/cultura.xml,,rss,noticias,es,eu,es,true,2
-La Vanguardia Cultura,https://www.lavanguardia.com/cultura,https://www.lavanguardia.com/rss/cultura.xml,,rss,noticias,es,eu,es,true,2
+La Vanguardia Cultura,https://www.lavanguardia.com/cultura,https://www.lavanguardia.com/rss/cultura.xml,,rss,noticias,es,eu,es,true,1
 ABC Cultura,https://www.abc.es/cultura/,https://www.abc.es/rss/feeds/abc_Cultura.xml,,rss,noticias,es,eu,es,true,2
 Cinco Días Cultura,https://cincodias.elpais.com/cultura/,,https://cincodias.elpais.com/cultura/,scraping,noticias,es,eu,es,true,2
 Le Monde Livres,https://www.lemonde.fr/livres/,https://www.lemonde.fr/livres/rss_full.xml,,rss,noticias,fr,eu,fr,true,1
@@ -14,8 +14,8 @@ Libération Livres,https://www.liberation.fr/culture/livres/,https://www.liberat
 FAZ Feuilleton,https://www.faz.net/aktuell/feuilleton/,https://www.faz.net/rss/aktuell/feuilleton/,,rss,noticias,de,eu,de,true,1
 Süddeutsche Kultur,https://www.sueddeutsche.de/kultur,https://rss.sueddeutsche.de/rss/Kultur,,rss,noticias,de,eu,de,true,2
 Die Welt Kultur,https://www.welt.de/kultur/,https://www.welt.de/feeds/section/kultur.rss,,rss,noticias,de,eu,de,true,2
-Corriere Cultura,https://www.corriere.it/cultura/,https://www.corriere.it/rss/cultura.xml,,rss,noticias,it,eu,it,true,2
-La Repubblica Cultura,https://www.repubblica.it/cultura/,https://www.repubblica.it/rss/cultura/rss2.0.xml,,rss,noticias,it,eu,it,true,2
+Corriere Cultura,https://www.corriere.it/cultura/,https://www.corriere.it/rss/cultura.xml,,rss,noticias,it,eu,it,true,1
+La Repubblica Cultura,https://www.repubblica.it/cultura/,https://www.repubblica.it/rss/cultura/rss2.0.xml,,rss,noticias,it,eu,it,true,1
 La Stampa Cultura,https://www.lastampa.it/cultura/,https://www.lastampa.it/rss/cultura.xml,,rss,noticias,it,eu,it,true,2
 Il Sole 24 Ore Cultura,https://www.ilsole24ore.com/art/cultura,https://www.ilsole24ore.com/rss/cultura.xml,,rss,noticias,it,eu,it,true,2
 Il Fatto Quotidiano Cultura,https://www.ilfattoquotidiano.it/cultura/,https://www.ilfattoquotidiano.it/cultura/feed/,,rss,noticias,it,eu,it,true,2
@@ -29,7 +29,7 @@ Le Soir Culture,https://www.lesoir.be/culture,https://www.lesoir.be/rss/culture,
 Der Standard Kultur,https://www.derstandard.at/kultur,https://www.derstandard.at/rss/kultur,,rss,noticias,de,eu,at,true,2
 Die Presse Kultur,https://www.diepresse.com/kultur,https://www.diepresse.com/rss/kultur,,rss,noticias,de,eu,at,true,2
 NYT Books,https://www.nytimes.com/section/books,https://rss.nytimes.com/services/xml/rss/nyt/Books.xml,,rss,noticias,en,us,us,true,1
-Washington Post Books,https://www.washingtonpost.com/entertainment/books/,https://news.google.com/rss/search?q=site:washingtonpost.com/entertainment/books&hl=en-US&gl=US&ceid=US:en,,rss,noticias,en,us,us,true,2
+Washington Post Books,https://www.washingtonpost.com/entertainment/books/,https://news.google.com/rss/search?q=site:washingtonpost.com/entertainment/books&hl=en-US&gl=US&ceid=US:en,,rss,noticias,en,us,us,true,1
 Wall Street Journal Books,https://www.wsj.com/arts-culture/books,https://news.google.com/rss/search?q=site:wsj.com+book+review&hl=en-US&gl=US&ceid=US:en,,rss,noticias,en,us,us,true,2
 Los Angeles Times Books,https://www.latimes.com/entertainment-arts/books,https://www.latimes.com/entertainment-arts/books/rss2.0.xml,,rss,noticias,en,us,us,true,2
 Boston Globe Books,https://www.bostonglobe.com/arts/books/,https://www.bostonglobe.com/arts/books/?p1=BGHeader_RSS,,rss,noticias,en,us,us,true,2
