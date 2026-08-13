@@ -1,64 +1,75 @@
-# Publishing Monitor
+# Bot editorial Telegram
 
-Agregador interno de señales del sector del libro. Ingesta RSS, clasificación con Claude, dashboard filtrable.
+Bot local que ingiere RSS y scraping de medios culturales/editoriales, clasifica con Claude y envía un informe diario por Telegram.
+
+## Requisitos
+
+- Python 3.11+
+- Cuenta Anthropic (API key)
+- Bot de Telegram (`TELEGRAM_BOT_TOKEN` + `TELEGRAM_CHAT_ID`)
 
 ## Setup
 
-### 1. Supabase
-
-1. Crear proyecto en [supabase.com](https://supabase.com) (región EU recomendada).
-2. Ejecutar el SQL de [`supabase/migrations/001_initial_schema.sql`](supabase/migrations/001_initial_schema.sql) en el SQL Editor.
-3. Copiar credenciales a `.env.local`:
-
 ```bash
-cp .env.example .env.local
-# Rellenar SUPABASE_URL, SUPABASE_ANON_KEY, SUPABASE_SERVICE_ROLE_KEY
-# También ANTHROPIC_API_KEY y CRON_SECRET (string aleatorio)
+python -m venv .venv
+source .venv/bin/activate
+pip install -r requirements.txt
+cp .env.example .env
+# Editar .env con tus claves
 ```
 
-Para el dashboard en cliente, duplica URL y anon key con prefijo `NEXT_PUBLIC_`.
-
-### 2. Instalar y verificar
+## Inicialización
 
 ```bash
-npm install
-npm run smoke-db          # Verifica conexión DB
-npm run discover-feeds    # Descubre feeds RSS
-npm run seed-sources      # Inserta fuentes en DB
-npm run test-feeds        # Valida que los feeds parsean
-npm run dev
+python scripts/init_db.py
+python scripts/load_medios.py
 ```
 
-### 3. Ingesta y clasificación (local)
+## Uso manual
 
 ```bash
-curl -H "Authorization: Bearer $CRON_SECRET" http://localhost:3000/api/cron/ingest
-curl -H "Authorization: Bearer $CRON_SECRET" http://localhost:3000/api/cron/classify
+# Ingesta única
+python scripts/run_ingest_once.py
+
+# Validar deduplicación (2 pasadas)
+python scripts/validate_ingest.py
+
+# Clasificar pendientes
+python scripts/classify_pending.py
+
+# Ver informe de prueba
+python scripts/print_report.py
 ```
 
-## Deploy (Vercel)
+## Bot + scheduler
 
-1. Push a GitHub e importar en Vercel.
-2. Configurar las mismas env vars.
-3. Los crons en `vercel.json` se activan en producción (requiere plan Pro para frecuencia <1/día; alternativa: cron-job.org con Bearer token).
+```bash
+python -m bot.main
+```
 
-## Scripts
+Tareas programadas (hora `Europe/Madrid`):
 
-| Comando | Descripción |
-|---------|-------------|
-| `npm run discover-feeds` | Busca RSS en dominios semilla |
-| `npm run seed-sources` | Inserta fuentes en Supabase |
-| `npm run test-feeds` | Valida feeds activos |
-| `npm run smoke-db` | Test de conexión DB |
-| `npm run validate-mvp` | Comprueba criterios MVP contra Supabase |
+- **Ingesta**: 08:00, 11:00, 14:00, 17:00, 20:00, 23:00
+- **Cierre**: 06:00 (ingesta + clasificación)
+- **Informe automático**: 06:30
 
-## Fuentes semilla
+Comandos Telegram:
 
-23 dominios en `scripts/seed-data.ts`. Tras discovery + overrides manuales, **19 fuentes** tienen RSS válido (≥15 requerido). Cuatro sin feed detectable: Publishers Weekly, The Bookseller, Shelf Awareness, Publishers Marketplace — ver `DEPLOY.md`.
+- `/informe` — desde último cierre o últimas 24h
+- `/informe_hoy` — solo lo recopilado hoy
 
-## Arquitectura
+## Estructura
 
-- **Ingesta** (`/api/cron/ingest`): cada 2h, parsea RSS y deduplica por URL.
-- **Clasificación** (`/api/cron/classify`): cada hora, Claude puntúa items sin score.
-- **Dashboard** (`/`): filtros por categoría/región, orden por fecha o relevancia.
-- **Export** (`/api/export/week`): markdown agrupado por categoría para newsletter.
+| Ruta | Descripción |
+|------|-------------|
+| `medios.csv` | Fuentes con categoría `ideas`/`noticias` y método `rss`/`scraping` |
+| `ingest/` | RSS (feedparser) y scraping (BeautifulSoup) |
+| `ai/classify.py` | Clasificación y resumen con Anthropic |
+| `reports/generator.py` | Formato del informe Telegram |
+| `bot/main.py` | APScheduler + bot polling |
+
+## Medios
+
+~100 fuentes en `medios.csv`: prensa generalista (secciones cultura/libros), revistas de ensayo, semanarios y medios especializados del sector editorial.
+
+Los medios sin RSS usan scraping de la sección concreta (Fase 7).
