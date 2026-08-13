@@ -15,7 +15,7 @@ from db.connection import get_connection
 from db.models import Categoria, ReportFilter
 from medios_tiers import get_tier, tier_label
 from reports.session import ReportSession, save_session
-from reports.prioritize import events_to_trends, prioritize_articles
+from reports.prioritize import events_to_trends, limit_batch_for_prioritization, prioritize_articles
 
 CATEGORY_HEADERS: dict[Categoria, str] = {
     "ideas": "📚 Ideas del mundo editorial",
@@ -390,8 +390,9 @@ def build_report(
                 total_matched=0,
             )
 
-        prioritization = prioritize_articles(articles)
-        total_matched = prioritization.total_input
+        batch, total_fetched = limit_batch_for_prioritization(articles)
+        prioritization = prioritize_articles(batch)
+        total_matched = total_fetched
         if not prioritization.articles:
             now = _tz_now()
             lines = _header_lines(mode, report_filter, now)
