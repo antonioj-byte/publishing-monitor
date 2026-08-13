@@ -91,6 +91,20 @@ python3 -m bot.main
 
 Comandos en Telegram: `/start`, `/informe`, `/informe_hoy`
 
+### Informe: traducción y jerarquía
+
+Con **Anthropic API válida** y artículos reclasificados (`python3 scripts/reclassify_all.py --yes`):
+
+- **Titular y resumen siempre en castellano** (traducción automática)
+- **Jerarquía por relevancia** dentro de cada bloque (ideas / noticias):
+  - 🔥 Destacado (score 5)
+  - 📌 Relevante (score 4)
+  - 📋 Señales secundarias (score 3)
+
+Límites en `.env`: `MAX_DESTACADOS`, `MAX_RELEVANTES`, `MAX_SECUNDARIOS`, `MAX_ARTICLES_PER_INFORME`.
+
+Personaliza criterios editando [`editorial_criterios.md`](editorial_criterios.md).
+
 Solo responde al `TELEGRAM_CHAT_ID` configurado (uso personal).
 
 Para dejarlo siempre activo en Mac: `./deploy/install-launchd.sh`
