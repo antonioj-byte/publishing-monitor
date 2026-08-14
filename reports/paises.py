@@ -103,6 +103,7 @@ MEDIO_PAISES: dict[str, str] = {
     "L'Obs Culture": "fr",
     "Le Point Culture": "fr",
     "L'Express Culture": "fr",
+    "Les Inrocks": "fr",
     "Internazionale": "it",
     "L'Espresso Cultura": "it",
     "Panorama Cultura": "it",
