@@ -20,8 +20,8 @@ logger = logging.getLogger(__name__)
 
 from reports.tags import validate_tags
 
-MODEL = "claude-sonnet-5"
-FALLBACK_MODEL = "claude-haiku-4-5"
+MODEL = "claude-haiku-4-5"
+FALLBACK_MODEL = "claude-sonnet-5"
 _API_AUTH_FAILED = False
 
 SYSTEM_PROMPT_BASE = """Eres un asistente editorial especializado en libros, literatura e industria editorial.
