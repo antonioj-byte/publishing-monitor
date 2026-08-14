@@ -5,6 +5,8 @@ from __future__ import annotations
 import re
 import unicodedata
 
+from bot.config import settings
+
 # Strong off-topic signals (multilingual). Require literary counter-signals to keep.
 OFF_TOPIC_TERMS = (
     # Music
@@ -130,6 +132,24 @@ ON_TOPIC_TERMS = (
     "literary",
     "literario",
     "literaria",
+    # German / French (common in EU feeds)
+    "roman",
+    "romans",
+    "buch",
+    "bucher",
+    "bücher",
+    "autorin",
+    "schriftsteller",
+    "verlag",
+    "verlage",
+    "livre",
+    "livres",
+    "auteur",
+    "autrice",
+    "editeur",
+    "éditeur",
+    "editions",
+    "éditions",
     "essay",
     "ensayo",
     "memoir",
@@ -246,3 +266,21 @@ def filter_editorial_scope(articles: list[dict]) -> list[dict]:
         ):
             kept.append(article)
     return kept
+
+
+def apply_keyword_scope_filter(articles: list[dict]) -> list[dict]:
+    """
+    Keyword safety net for articles not yet vetted by the LLM classifier.
+
+    Articles already classified with relevance_score >= min_relevance_score were
+    approved by Claude (en_alcance) and must not be dropped again here — the
+    keyword list is EN/ES-heavy and rejects valid DE/FR literary pieces.
+    """
+    min_score = settings.min_relevance_score
+    trusted = [
+        article
+        for article in articles
+        if (article.get("relevance_score") or 0) >= min_score
+    ]
+    untrusted = [article for article in articles if article not in trusted]
+    return trusted + filter_editorial_scope(untrusted)

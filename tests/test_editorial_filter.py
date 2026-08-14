@@ -8,7 +8,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from ai.editorial_filter import is_editorial_scope
+from ai.editorial_filter import apply_keyword_scope_filter, is_editorial_scope
 
 
 class EditorialFilterTests(unittest.TestCase):
@@ -59,6 +59,33 @@ class EditorialFilterTests(unittest.TestCase):
                 resumen="The publishing group saw growth in fiction and translation rights.",
             )
         )
+
+
+    def test_keeps_german_literary_headline(self) -> None:
+        self.assertTrue(
+            is_editorial_scope(
+                titulo="Neuer Roman der Autorin erscheint im Herbst",
+                resumen="Der Verlag kündigt die Buchpremiere auf der Frankfurter Messe an.",
+            )
+        )
+
+    def test_trusts_llm_classified_articles_in_reports(self) -> None:
+        classified = {
+            "titulo_original": "Stadtrat beschließt neue Kulturpolitik",
+            "titular_traducido": "El ayuntamiento aprueba cultura",
+            "resumen_raw": "Debatte über Subventionen",
+            "resumen_generado": "Política cultural local",
+            "relevance_score": 4,
+        }
+        unclassified = {
+            "titulo_original": "Rockkonzert in Berlin",
+            "titular_traducido": None,
+            "resumen_raw": "Die Tournee geht weiter",
+            "resumen_generado": "Musik und Konzerte",
+            "relevance_score": 2,
+        }
+        kept = apply_keyword_scope_filter([classified, unclassified])
+        self.assertEqual([item["relevance_score"] for item in kept], [4])
 
 
 if __name__ == "__main__":

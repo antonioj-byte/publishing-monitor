@@ -8,7 +8,7 @@ from dataclasses import dataclass
 from datetime import datetime, timedelta
 from zoneinfo import ZoneInfo
 
-from ai.editorial_filter import filter_editorial_scope
+from ai.editorial_filter import apply_keyword_scope_filter, filter_editorial_scope
 from ai.translation import is_likely_untranslated
 from bot.config import settings
 from db.connection import get_connection
@@ -143,6 +143,128 @@ def _count_country_candidates(
             (geo_val,),
         ).fetchone()[0]
     return in_window, pending, total_geo
+
+
+def _article_has_tags(raw_tags: str, wanted: set[str]) -> bool:
+    try:
+        tags = json.loads(raw_tags)
+    except (json.JSONDecodeError, TypeError):
+        return False
+    if not isinstance(tags, list):
+        return False
+    return any(tag in wanted for tag in tags)
+
+
+def _fetch_sql_rows(
+    since: datetime,
+    *,
+    include_sent: bool,
+    report_filter: ReportFilter | None,
+    date_by_publication: bool,
+    strict_publication: bool,
+    apply_tags: bool = True,
+) -> list[dict]:
+    """Load classified articles from SQL without post-filters."""
+    min_score = settings.min_relevance_score
+    since_iso = publication_since_iso(since)
+    query = """
+        SELECT a.id, a.titulo_original, a.titular_traducido, a.resumen_generado,
+               a.resumen_raw, a.relevance_score, a.tags, a.enviado,
+               m.pais, m.region
+        FROM articulos a
+        JOIN medios m ON m.id = a.medio_id
+        WHERE a.procesado = 1 AND a.relevance_score >= ?
+    """
+    params: list[object] = [min_score]
+
+    if date_by_publication and strict_publication:
+        query += (
+            " AND a.fecha_publicacion IS NOT NULL"
+            " AND a.fecha_publicacion != ''"
+            " AND a.fecha_publicacion >= ?"
+        )
+    elif date_by_publication:
+        query += (
+            " AND COALESCE(NULLIF(a.fecha_publicacion, ''), a.fecha_ingesta) >= ?"
+        )
+    else:
+        query += " AND a.fecha_ingesta >= ?"
+    params.append(since_iso)
+
+    if report_filter:
+        if report_filter.pais:
+            query += " AND m.pais = ?"
+            params.append(report_filter.pais)
+        elif report_filter.region:
+            query += " AND m.region = ?"
+            params.append(report_filter.region)
+        if apply_tags and report_filter.tags:
+            placeholders = ",".join("?" * len(report_filter.tags))
+            query += f"""
+              AND a.tags IS NOT NULL
+              AND EXISTS (
+                SELECT 1 FROM json_each(a.tags) je
+                WHERE je.value IN ({placeholders})
+              )
+            """
+            params.extend(report_filter.tags)
+
+    if not include_sent:
+        query += " AND a.enviado = 0"
+
+    with get_connection() as conn:
+        rows = conn.execute(query, params).fetchall()
+    return [dict(row) for row in rows]
+
+
+def _diagnose_empty_fetch(
+    since: datetime,
+    *,
+    include_sent: bool,
+    report_filter: ReportFilter | None,
+    date_by_publication: bool,
+    strict_publication: bool,
+) -> dict[str, int]:
+    """Explain why SQL has candidates but the report query returned none."""
+    base_rows = _fetch_sql_rows(
+        since,
+        include_sent=True,
+        report_filter=report_filter,
+        date_by_publication=date_by_publication,
+        strict_publication=strict_publication,
+        apply_tags=False,
+    )
+    with_tags_rows = base_rows
+    if report_filter and report_filter.tags:
+        tag_set = set(report_filter.tags)
+        with_tags_rows = [
+            row
+            for row in base_rows
+            if row.get("tags")
+            and row["tags"] not in ("", "[]")
+            and _article_has_tags(row["tags"], tag_set)
+        ]
+
+    unsent_rows = [row for row in with_tags_rows if not row.get("enviado")]
+    keyword_rows = filter_editorial_scope(with_tags_rows)
+    working_rows = unsent_rows if not include_sent else with_tags_rows
+    keyword_unsent = filter_editorial_scope(working_rows)
+
+    missing_tags = sum(
+        1
+        for row in base_rows
+        if not row.get("tags") or row["tags"] in ("", "[]")
+    )
+
+    return {
+        "sql_total": len(base_rows),
+        "with_tags": len(with_tags_rows),
+        "unsent": len(unsent_rows),
+        "blocked_tags": max(0, len(base_rows) - len(with_tags_rows)),
+        "blocked_enviado": max(0, len(with_tags_rows) - len(unsent_rows)),
+        "blocked_keyword": max(0, len(working_rows) - len(keyword_unsent)),
+        "missing_tags": missing_tags,
+    }
 
 
 def _tag_date_expr(
@@ -303,10 +425,38 @@ def _empty_country_message(
             "`python3 scripts/run_ingest_once.py`"
         )
     elif in_window:
-        lines.append(
-            "Hay artículos clasificados en la ventana, pero todos fueron "
-            "descartados por el filtro editorial."
+        diag = _diagnose_empty_fetch(
+            since,
+            include_sent=True,
+            report_filter=report_filter,
+            date_by_publication=date_by_publication,
+            strict_publication=strict_publication,
         )
+        if report_filter.tags and diag["blocked_tags"]:
+            lines.append(
+                f"{diag['blocked_tags']} artículo(s) en ventana no tienen el tag pedido."
+            )
+            if diag["missing_tags"]:
+                lines.append(
+                    f"{diag['missing_tags']} clasificados sin tags — ejecuta `/reclasificar`."
+                )
+        elif diag["blocked_enviado"]:
+            lines.append(
+                "Hay artículos clasificados, pero ya se enviaron en un informe anterior. "
+                "Prueba `/informe 7 " + esc(label.lower()) + "` o espera nuevas ingesta."
+            )
+        elif diag["blocked_keyword"]:
+            lines.append(
+                "Hay artículos clasificados en la ventana, pero el filtro editorial "
+                "por palabras clave los descartó. Ejecuta `/reclasificar` para "
+                "revisarlos con Claude."
+            )
+        else:
+            lines.append(
+                "Hay artículos clasificados en la ventana, pero no pasaron los filtros "
+                "del informe. Revisa con "
+                f"`python3 scripts/diagnose_pipeline.py {report_filter.days} {label.lower()}`."
+            )
     else:
         lines.append(
             f"Prueba un periodo más amplio: `/informe 7 {label.lower()}` "
@@ -392,7 +542,7 @@ def _fetch_articles(
             article.get("medio_nombre", ""),
         )
 
-    articles = filter_editorial_scope(articles)
+    articles = apply_keyword_scope_filter(articles)
 
     if date_by_publication and strict_publication and not article_ids:
         articles = [
