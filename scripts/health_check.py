@@ -43,7 +43,9 @@ def main() -> None:
             )
             results.append(check("ANTHROPIC_API_KEY válida", True))
         except Exception as exc:
-            results.append(check("ANTHROPIC_API_KEY válida", False, str(exc)[:80]))
+            err = str(exc)
+            hint = " — renueva la clave en console.anthropic.com" if "401" in err else ""
+            results.append(check("ANTHROPIC_API_KEY válida", False, err[:80] + hint))
 
     if settings.telegram_bot_token.strip():
         try:

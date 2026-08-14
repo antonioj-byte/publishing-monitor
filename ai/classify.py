@@ -117,17 +117,25 @@ def classify_offline(
     resumen: str | None,
     categoria_default: Categoria,
     idioma: str,
+    reason: str = "missing",
 ) -> ClassificationResult:
-    """Fallback when ANTHROPIC_API_KEY is not configured."""
+    """Fallback when ANTHROPIC_API_KEY is not configured or rejected."""
     in_scope = is_editorial_scope(
         titulo=titulo,
         resumen=resumen,
     )
     if idioma != "es":
-        summary = (
-            "Resumen no disponible en castellano (clasificación offline). "
-            "Configura ANTHROPIC_API_KEY y ejecuta reclassify_untranslated.py."
-        )
+        if reason == "auth":
+            summary = (
+                "Resumen no disponible: ANTHROPIC_API_KEY inválida o expirada. "
+                "Crea una clave nueva en console.anthropic.com, actualiza .env "
+                "y ejecuta reclassify_untranslated.py."
+            )
+        else:
+            summary = (
+                "Resumen no disponible en castellano (clasificación offline). "
+                "Configura ANTHROPIC_API_KEY y ejecuta reclassify_untranslated.py."
+            )
         titular = f"[{idioma.upper()}] {titulo[:120]}"
     else:
         summary = (resumen or titulo)[:400]
@@ -167,6 +175,7 @@ def classify_article(
             resumen=resumen,
             categoria_default=categoria_default,
             idioma=idioma,
+            reason="missing",
         )
 
     client = anthropic.Anthropic(api_key=settings.anthropic_api_key)
@@ -219,6 +228,7 @@ def classify_article(
                 resumen=resumen,
                 categoria_default=categoria_default,
                 idioma=idioma,
+                reason="auth",
             )
         except anthropic.NotFoundError:
             continue

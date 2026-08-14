@@ -76,6 +76,28 @@ def main() -> None:
     else:
         print("Token Telegram: NO configurado")
 
+    api_key = settings.anthropic_api_key.strip()
+    if api_key:
+        try:
+            import anthropic
+            from ai.classify import MODEL
+
+            client = anthropic.Anthropic(api_key=api_key)
+            client.messages.create(
+                model=MODEL,
+                max_tokens=10,
+                messages=[{"role": "user", "content": "ok"}],
+            )
+            print("ANTHROPIC_API_KEY: OK (traducción y resúmenes en castellano)")
+        except Exception as exc:
+            err = str(exc)
+            if "401" in err:
+                print("ANTHROPIC_API_KEY: INVÁLIDA — renueva en console.anthropic.com")
+            else:
+                print(f"ANTHROPIC_API_KEY: error ({err[:60]})")
+    else:
+        print("ANTHROPIC_API_KEY: NO configurada — resúmenes sin traducir")
+
     hb = read_heartbeat()
     if hb:
         age = time.time() - float(hb.get("epoch", 0))
