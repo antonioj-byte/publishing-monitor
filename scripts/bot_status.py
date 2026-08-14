@@ -16,14 +16,38 @@ from bot.config import settings
 from bot.heartbeat import HEARTBEAT_PATH, read_heartbeat
 
 
+def _bot_process_running() -> bool:
+    try:
+        result = subprocess.run(
+            ["pgrep", "-f", r"python.*bot\.main"],
+            capture_output=True,
+            text=True,
+        )
+        return result.returncode == 0
+    except OSError:
+        return False
+
+
+def _print_start_hint() -> None:
+    print("\n→ Para arrancar el bot:")
+    if sys.platform == "darwin":
+        print("  ./deploy/install-launchd.sh          # instala y deja activo en segundo plano")
+        print("  ./deploy/reset-and-launch-mac.sh     # actualiza y reinicia")
+    else:
+        print("  ./deploy/install-systemd.sh          # Linux con systemd")
+        print("  python3 -m bot.main                  # prueba manual en primer plano")
+
+
 def main() -> None:
     print("=== Estado del bot Telegram ===\n")
 
     token = settings.telegram_bot_token.strip()
     chat_id = settings.telegram_chat_id.strip()
+    print(f"Sistema: {sys.platform} ({'macOS' if sys.platform == 'darwin' else 'no macOS'})")
     print(f"TELEGRAM_CHAT_ID configurado: {chat_id or 'NO'}")
     print(f"Base de datos: {settings.database_path}")
     print(f"Heartbeat: {HEARTBEAT_PATH}")
+    print(f"Proceso bot.main: {'sí' if _bot_process_running() else 'no'}")
     print()
 
     if token:
@@ -63,6 +87,7 @@ def main() -> None:
             print("⚠️  Heartbeat antiguo — el bot probablemente está colgado o parado")
     else:
         print("Heartbeat: no encontrado — el bot no está corriendo o no arrancó")
+        _print_start_hint()
 
     if sys.platform == "darwin":
         uid = subprocess.check_output(["id", "-u"], text=True).strip()
@@ -78,9 +103,15 @@ def main() -> None:
         else:
             print("LaunchAgent com.editorial-bot: no cargado")
             print("  Instala con: ./deploy/install-launchd.sh")
+    elif sys.platform != "darwin" and not hb:
+        print(
+            "\nNota: si quieres el bot en tu Mac, ejecuta estos comandos "
+            "en Terminal.app (no en Cursor cloud)."
+        )
 
     print("\nComandos útiles:")
-    print("  ./deploy/reset-and-launch-mac.sh --no-pull")
+    if sys.platform == "darwin":
+        print("  ./deploy/reset-and-launch-mac.sh --no-pull")
     print("  tail -f data/bot.log")
     print("  python3 scripts/watchdog_bot.py")
 
