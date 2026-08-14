@@ -16,6 +16,7 @@ from telegram.ext import Application, CommandHandler, ContextTypes, MessageHandl
 from zoneinfo import ZoneInfo
 
 from ai.classify import classify_pending
+from bot.profile import sync_bot_profile
 from bot.config import ENV_PATH, settings
 from bot.heartbeat import write_heartbeat
 from bot.telegram_handlers import (
@@ -260,6 +261,7 @@ async def main_async() -> None:
                 BotCommand("reiniciar", "Reiniciar el bot"),
             ]
         )
+        await sync_bot_profile(app.bot)
 
         webhook = await app.bot.get_webhook_info()
         if webhook.url:
