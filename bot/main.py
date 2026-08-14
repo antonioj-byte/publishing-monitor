@@ -11,6 +11,7 @@ from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.cron import CronTrigger
 from telegram.error import Conflict
 from telegram.constants import ParseMode
+from telegram import BotCommand
 from telegram.ext import Application, CommandHandler, ContextTypes, MessageHandler, filters
 from zoneinfo import ZoneInfo
 
@@ -41,6 +42,8 @@ logging.basicConfig(
     format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
 )
 logger = logging.getLogger(__name__)
+
+BOT_VERSION = "2026-08-14-tags"
 
 _JOB_DEFAULTS = {
     "max_instances": 1,
@@ -225,7 +228,20 @@ async def main_async() -> None:
     logger.info("Bot starting (timezone=%s, chat_id=%s)", settings.timezone, settings.telegram_chat_id)
     async with app:
         me = await app.bot.get_me()
-        logger.info("Telegram conectado como @%s", me.username)
+        logger.info("Telegram conectado como @%s (versión %s)", me.username, BOT_VERSION)
+
+        await app.bot.set_my_commands(
+            [
+                BotCommand("start", "Ayuda y comandos"),
+                BotCommand("ping", "Comprobar que el bot responde"),
+                BotCommand("informe", "Informe editorial"),
+                BotCommand("informe_hoy", "Informe de hoy"),
+                BotCommand("informe_mas", "Continuar informe anterior"),
+                BotCommand("tags", "Categorías editoriales"),
+                BotCommand("tag", "Informe por tag: /tag ficcion 7"),
+                BotCommand("paises", "Países y regiones"),
+            ]
+        )
 
         webhook = await app.bot.get_webhook_info()
         if webhook.url:
