@@ -34,8 +34,8 @@ def _print_start_hint() -> None:
         print("  ./deploy/install-launchd.sh          # instala y deja activo en segundo plano")
         print("  ./deploy/reset-and-launch-mac.sh     # actualiza y reinicia")
     else:
+        print("  ./deploy/start-bot.sh                # arranque manual (carga .env)")
         print("  ./deploy/install-systemd.sh          # Linux con systemd")
-        print("  python3 -m bot.main                  # prueba manual en primer plano")
 
 
 def main() -> None:

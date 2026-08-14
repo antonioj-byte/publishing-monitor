@@ -14,7 +14,7 @@ from telegram.ext import Application, CommandHandler, ContextTypes, MessageHandl
 from zoneinfo import ZoneInfo
 
 from ai.classify import classify_pending
-from bot.config import settings
+from bot.config import ENV_PATH, settings
 from bot.heartbeat import write_heartbeat
 from bot.telegram_handlers import (
     free_text_report,
@@ -175,8 +175,10 @@ def validate_settings() -> None:
     if not settings.telegram_chat_id:
         missing.append("TELEGRAM_CHAT_ID")
     if missing:
+        env_hint = f"Archivo esperado: {ENV_PATH}\n" if not ENV_PATH.is_file() else ""
         raise RuntimeError(
-            "Faltan variables en .env: " + ", ".join(missing) + "\n"
+            env_hint
+            + "Faltan variables en .env: " + ", ".join(missing) + "\n"
             "1. Crea bot con @BotFather → /newbot\n"
             "2. Envía /start al bot\n"
             "3. python3 scripts/get_telegram_chat_id.py"

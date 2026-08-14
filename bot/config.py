@@ -4,7 +4,9 @@ from pathlib import Path
 
 from dotenv import load_dotenv
 
-load_dotenv()
+PROJECT_ROOT = Path(__file__).resolve().parent.parent
+ENV_PATH = PROJECT_ROOT / ".env"
+load_dotenv(ENV_PATH)
 
 
 @dataclass(frozen=True)
@@ -89,6 +91,5 @@ class Settings:
 
 
 settings = Settings.from_env()
-PROJECT_ROOT = Path(__file__).resolve().parent.parent
 MEDIOS_CSV = PROJECT_ROOT / "medios.csv"
 EDITORIAL_CRITERIA = PROJECT_ROOT / "editorial_criterios.md"
