@@ -26,6 +26,7 @@ from bot.telegram_handlers import (
     informe_mas_command,
     paises_command,
     ping_command,
+    reclasificar_command,
     start_command,
     tag_command,
     tags_command,
@@ -43,7 +44,7 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-BOT_VERSION = "2026-08-14-tags"
+BOT_VERSION = "2026-08-14-tags-reclassify"
 
 _JOB_DEFAULTS = {
     "max_instances": 1,
@@ -211,6 +212,7 @@ def build_application() -> Application:
     app.add_handler(CommandHandler("paises", paises_command))
     app.add_handler(CommandHandler("tags", tags_command))
     app.add_handler(CommandHandler("tag", tag_command))
+    app.add_handler(CommandHandler("reclasificar", reclasificar_command))
     app.add_handler(
         MessageHandler(
             filters.TEXT & ~filters.COMMAND,
@@ -240,6 +242,7 @@ async def main_async() -> None:
                 BotCommand("tags", "Categorías editoriales"),
                 BotCommand("tag", "Informe por tag: /tag ficcion 7"),
                 BotCommand("paises", "Países y regiones"),
+                BotCommand("reclasificar", "Reclasificar artículos con tags"),
             ]
         )
 
