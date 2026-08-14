@@ -12,7 +12,9 @@ from telegram.constants import ParseMode
 from telegram.ext import ContextTypes
 
 from bot.auth import is_authorized, unauthorized_message
+from bot.reclassify_service import run_reclassify_all
 from bot.report_parser import parse_command_args, parse_free_text, parse_tag_command_args
+from bot.version import BOT_VERSION
 from db.models import ReportFilter
 from reports.generator import mark_articles_sent, record_informe, split_message
 from reports.pipeline import build_editorial_report
@@ -88,7 +90,7 @@ async def ping_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
             unauthorized_message(update.effective_chat.id if update.effective_chat else "?")
         )
         return
-    await update.message.reply_text("pong — bot operativo")
+    await update.message.reply_text(f"pong — bot operativo (v{BOT_VERSION})")
 
 
 async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -113,14 +115,13 @@ async def reclasificar_command(update: Update, context: ContextTypes.DEFAULT_TYP
         )
         return
 
-    from bot.reclassify_service import run_reclassify_all
-
-    _RECLASSIFY_RUNNING = True
     await update.message.reply_text(
         "Reclasificación iniciada (todos los artículos, con tags).\n"
         "Puede tardar 1-2 horas. Te aviso cuando termine.\n"
         "El bot sigue respondiendo a /ping mientras tanto."
     )
+
+    _RECLASSIFY_RUNNING = True
 
     async def _job() -> None:
         global _RECLASSIFY_RUNNING
@@ -147,6 +148,22 @@ async def reclasificar_command(update: Update, context: ContextTypes.DEFAULT_TYP
             await update.message.reply_text(text)
 
     asyncio.create_task(_job())
+
+
+async def unknown_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    if not update.message:
+        return
+    if not is_authorized(update):
+        await update.message.reply_text(
+            unauthorized_message(update.effective_chat.id if update.effective_chat else "?")
+        )
+        return
+    cmd = update.message.text.split()[0] if update.message.text else "?"
+    await update.message.reply_text(
+        f"Comando {cmd} no reconocido en esta versión (v{BOT_VERSION}).\n"
+        "Prueba /start para ver los comandos disponibles.\n"
+        "Si acabas de actualizar, espera 1-2 min al redeploy de Railway."
+    )
 
 
 async def paises_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:

@@ -11,7 +11,7 @@ from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.cron import CronTrigger
 from telegram.error import Conflict
 from telegram.constants import ParseMode
-from telegram import BotCommand
+from telegram import BotCommand, Update
 from telegram.ext import Application, CommandHandler, ContextTypes, MessageHandler, filters
 from zoneinfo import ZoneInfo
 
@@ -30,7 +30,9 @@ from bot.telegram_handlers import (
     start_command,
     tag_command,
     tags_command,
+    unknown_command,
 )
+from bot.version import BOT_VERSION
 from db.connection import init_schema
 from ingest.runner import ingest_all
 from reports.generator import mark_articles_sent, record_informe, split_message
@@ -43,8 +45,6 @@ logging.basicConfig(
     format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
 )
 logger = logging.getLogger(__name__)
-
-BOT_VERSION = "2026-08-14-tags-reclassify"
 
 _JOB_DEFAULTS = {
     "max_instances": 1,
@@ -153,6 +153,14 @@ async def _error_handler(update: object, context: ContextTypes.DEFAULT_TYPE) -> 
         write_heartbeat(status="conflict", detail=str(error))
         sys.exit(1)
     logger.exception("Unhandled handler error: %s", error)
+    if isinstance(update, Update) and update.effective_message:
+        try:
+            await update.effective_message.reply_text(
+                f"Error interno del bot (v{BOT_VERSION}). "
+                "Prueba /ping o espera al redeploy de Railway."
+            )
+        except Exception:
+            logger.exception("Could not notify user about handler error")
 
 
 def setup_scheduler(app: Application) -> AsyncIOScheduler:
@@ -213,6 +221,7 @@ def build_application() -> Application:
     app.add_handler(CommandHandler("tags", tags_command))
     app.add_handler(CommandHandler("tag", tag_command))
     app.add_handler(CommandHandler("reclasificar", reclasificar_command))
+    app.add_handler(MessageHandler(filters.COMMAND, unknown_command))
     app.add_handler(
         MessageHandler(
             filters.TEXT & ~filters.COMMAND,
