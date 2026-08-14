@@ -49,7 +49,30 @@ def _restart_mac() -> None:
     )
 
 
+def _systemd_usable() -> bool:
+    if sys.platform == "darwin":
+        return False
+    for sock in ("/run/systemd/private", "/var/run/systemd/private"):
+        if Path(sock).exists():
+            break
+    else:
+        return False
+    try:
+        subprocess.run(
+            ["systemctl", "is-system-running", "--quiet"],
+            check=False,
+            capture_output=True,
+        )
+        return True
+    except OSError:
+        return False
+
+
 def _restart_linux() -> None:
+    if not _systemd_usable():
+        _log("[watchdog] systemd no disponible — no se puede reiniciar automáticamente")
+        _log("[watchdog] Arranca manualmente: python3 -m bot.main")
+        return
     subprocess.run(["systemctl", "restart", "editorial-bot"], check=False)
 
 

@@ -12,6 +12,8 @@ set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$ROOT"
+# shellcheck source=platform.sh
+source "$ROOT/deploy/platform.sh"
 LABEL="com.editorial-bot"
 SERVICE_NAME="editorial-bot"
 DO_PULL=1
@@ -113,9 +115,9 @@ if [[ "$DO_VERIFY" -eq 1 ]]; then
 fi
 
 stop_bot() {
-  if [[ "$(uname)" == "Darwin" ]]; then
+  if is_macos; then
     launchctl bootout "gui/$(id -u)/$LABEL" 2>/dev/null || true
-  elif command -v systemctl >/dev/null 2>&1; then
+  elif systemd_usable; then
     sudo systemctl stop "$SERVICE_NAME" 2>/dev/null || true
   fi
   pkill -f "python.*bot.main" 2>/dev/null || true
@@ -123,14 +125,14 @@ stop_bot() {
 }
 
 start_bot() {
-  if [[ "$(uname)" == "Darwin" ]]; then
+  if is_macos; then
     "$ROOT/deploy/install-launchd.sh"
     launchctl kickstart -k "gui/$(id -u)/$LABEL"
     echo ""
     echo "Bot relanzado (launchd: $LABEL)"
     echo "  Logs:    tail -f $ROOT/data/bot.log"
     echo "  Errores: tail -f $ROOT/data/bot.error.log"
-  elif command -v systemctl >/dev/null 2>&1 && systemctl list-unit-files | grep -q "$SERVICE_NAME"; then
+  elif systemd_usable && systemctl list-unit-files 2>/dev/null | grep -q "$SERVICE_NAME"; then
     sudo systemctl restart "$SERVICE_NAME"
     echo ""
     echo "Bot relanzado (systemd: $SERVICE_NAME)"

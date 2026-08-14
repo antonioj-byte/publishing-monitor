@@ -1,8 +1,17 @@
 #!/usr/bin/env bash
-# Instala servicio systemd para el bot (Linux)
+# Instala servicio systemd para el bot (Linux con systemd activo)
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+# shellcheck source=platform.sh
+source "$ROOT/deploy/platform.sh"
+
+if ! systemd_usable; then
+  echo "Error: systemd no disponible en este sistema."
+  echo ""
+  systemd_missing_message
+  exit 1
+fi
 SERVICE_NAME="editorial-bot"
 PYTHON="$(command -v python3)"
 if [[ -x "$ROOT/.venv/bin/python3" ]]; then
