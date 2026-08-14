@@ -26,6 +26,10 @@ def _migrate_schema(conn: sqlite3.Connection) -> None:
             "ALTER TABLE medios ADD COLUMN pais TEXT NOT NULL DEFAULT 'xx'"
         )
 
+    art_cols = {row[1] for row in conn.execute("PRAGMA table_info(articulos)")}
+    if "tags" not in art_cols:
+        conn.execute("ALTER TABLE articulos ADD COLUMN tags TEXT")
+
     tables = {
         row[0]
         for row in conn.execute(

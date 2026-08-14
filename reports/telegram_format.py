@@ -3,9 +3,11 @@
 from __future__ import annotations
 
 import html
+import json
 import re
 
 from ai.translation import is_likely_untranslated
+from reports.tags import tag_labels as topical_tag_labels
 
 
 def esc(text: str) -> str:
@@ -39,5 +41,15 @@ def format_article_entry(item: dict) -> str:
         resumen = esc(item["resumen_generado"] or "(sin resumen)")
     medio = item.get("medio_nombre", "")
     source = f" — <i>{esc(medio)}</i>" if medio else ""
+    tag_line = ""
+    raw_tags = item.get("tags")
+    if raw_tags:
+        try:
+            keys = json.loads(raw_tags) if isinstance(raw_tags, str) else raw_tags
+            labels = topical_tag_labels(keys)
+            if labels:
+                tag_line = f"\n🏷️ {esc(', '.join(labels))}"
+        except (json.JSONDecodeError, TypeError):
+            pass
     url = esc(item["url"])
-    return f"📰 <b>{titular}</b>{source}\n{resumen}\n🔗 {url}"
+    return f"📰 <b>{titular}</b>{source}\n{resumen}{tag_line}\n🔗 {url}"

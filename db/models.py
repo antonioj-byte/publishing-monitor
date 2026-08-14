@@ -12,6 +12,8 @@ class ReportFilter:
     pais: str | None = None
     region: str | None = None
     location_label: str | None = None
+    tags: list[str] | None = None
+    tag_labels: list[str] | None = None
 
 
 @dataclass
@@ -47,5 +49,6 @@ class Articulo:
     hash_contenido: str
     procesado: bool
     enviado: bool
+    tags: str | None = None
     medio_nombre: str | None = None
     medio_region: Region | None = None

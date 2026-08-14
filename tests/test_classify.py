@@ -86,7 +86,8 @@ class ClassificationFallbackTests(unittest.TestCase):
                     procesado INTEGER,
                     relevance_score INTEGER,
                     resumen_generado TEXT,
-                    titular_traducido TEXT
+                    titular_traducido TEXT,
+                    tags TEXT
                 );
                 INSERT INTO medios VALUES
                     (1, 'Publishers Weekly', 'noticias', 1, 'us', 'us'),
@@ -94,10 +95,10 @@ class ClassificationFallbackTests(unittest.TestCase):
                 INSERT INTO articulos VALUES
                     (1, 1, 'Book publishing news', 'A publisher announces a book',
                      'noticias', 'en', '2026-08-13T10:00:00+00:00',
-                     '2026-08-13T10:00:00+00:00', 0, NULL, NULL, NULL),
+                     '2026-08-13T10:00:00+00:00', 0, NULL, NULL, NULL, NULL),
                     (2, 2, 'Literatur und Bücher', 'Ein neuer Roman',
                      'noticias', 'de', '2026-08-13T10:00:00+00:00',
-                     '2026-08-13T10:00:00+00:00', 0, NULL, NULL, NULL);
+                     '2026-08-13T10:00:00+00:00', 0, NULL, NULL, NULL, NULL);
                 """
             )
             conn.commit()

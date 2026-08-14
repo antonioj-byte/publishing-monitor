@@ -28,7 +28,8 @@ CREATE TABLE IF NOT EXISTS articulos (
     relevance_score INTEGER,
     hash_contenido TEXT NOT NULL UNIQUE,
     procesado INTEGER NOT NULL DEFAULT 0,
-    enviado INTEGER NOT NULL DEFAULT 0
+    enviado INTEGER NOT NULL DEFAULT 0,
+    tags TEXT
 );
 
 CREATE INDEX IF NOT EXISTS idx_articulos_fecha_ingesta ON articulos (fecha_ingesta DESC);
