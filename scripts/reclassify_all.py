@@ -41,12 +41,19 @@ def main() -> None:
 
     init_schema()
 
-    if not settings.anthropic_api_key:
+    if not settings.has_classify_api():
+        provider = settings.classify_provider
+        key_name = "GOOGLE_API_KEY" if provider == "gemini" else "ANTHROPIC_API_KEY"
         logger.warning(
-            "ANTHROPIC_API_KEY no configurada — se usará clasificación offline básica"
+            "%s no configurada — se usará clasificación offline básica",
+            key_name,
         )
     else:
-        logger.info("Usando Anthropic API para reclasificación")
+        logger.info(
+            "Usando %s (%s) para reclasificación",
+            settings.classify_provider,
+            settings.gemini_model if settings.classify_provider == "gemini" else "claude-haiku-4-5",
+        )
 
     with get_connection() as conn:
         total = conn.execute("SELECT COUNT(*) FROM articulos").fetchone()[0]
