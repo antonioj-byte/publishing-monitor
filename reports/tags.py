@@ -123,6 +123,17 @@ def extract_tags_from_text(text: str) -> tuple[list[str], str]:
     found: list[str] = []
     remainder = normalized
 
+    # Slug keys with underscores (literatura_local, ferias_premios, …).
+    # Longest first so no_ficcion wins over ficcion.
+    for key in sorted(VALID_TAG_KEYS, key=len, reverse=True):
+        if "_" not in key:
+            continue
+        pattern = rf"(?<![a-z0-9_]){re.escape(key)}(?![a-z0-9_])"
+        if re.search(pattern, remainder):
+            if key not in found:
+                found.append(key)
+            remainder = re.sub(pattern, " ", remainder)
+
     for alias, key in TAG_ALIASES:
         alias_norm = _normalize(alias)
         if alias_norm in remainder:
@@ -130,13 +141,18 @@ def extract_tags_from_text(text: str) -> tuple[list[str], str]:
                 found.append(key)
             remainder = remainder.replace(alias_norm, " ")
 
-    for key in VALID_TAG_KEYS:
-        if re.search(rf"\b{re.escape(key.replace('_', ' '))}\b", remainder):
+    for key in sorted(VALID_TAG_KEYS, key=len, reverse=True):
+        spaced = key.replace("_", " ")
+        if re.search(rf"\b{re.escape(spaced)}\b", remainder):
             if key not in found:
                 found.append(key)
-            remainder = re.sub(rf"\b{re.escape(key.replace('_', ' '))}\b", " ", remainder)
+            remainder = re.sub(rf"\b{re.escape(spaced)}\b", " ", remainder)
+        elif "_" not in key and re.search(rf"\b{re.escape(key)}\b", remainder):
+            if key not in found:
+                found.append(key)
+            remainder = re.sub(rf"\b{re.escape(key)}\b", " ", remainder)
 
-    remainder = re.sub(r"\s+", " ", remainder).strip(" ,.-")
+    remainder = re.sub(r"\s+", " ", remainder).strip(" ,.-_")
     return found, remainder
 
 
