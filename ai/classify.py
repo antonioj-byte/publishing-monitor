@@ -11,6 +11,7 @@ from dataclasses import dataclass
 import anthropic
 
 from ai.editorial_filter import is_editorial_scope
+from ai.tag_rules import refine_tags
 from bot.config import EDITORIAL_CRITERIA, settings
 from db.connection import get_connection
 from db.models import Categoria, ReportFilter
@@ -111,6 +112,24 @@ Tags editoriales (obligatorio: 1-3 slugs de esta lista):
 - ferias_premios: Ferias y premios (Frankfurt, Guadalajara, Booker, Nobel, Planeta, etc.)
 
 Elige el tag principal y hasta 2 secundarios si aplican. Usa solo slugs de la lista.
+
+Reglas estrictas de tags (MUY IMPORTANTE):
+- no_ficcion: SOLO memorias, biografías, crónica factual, divulgación, reportaje documental.
+  NO uses no_ficcion para: entrevistas sobre novelas, reseñas de ficción, perfiles de autores de ficción.
+- ficcion: novelas, relatos, reseñas de ficción, entrevistas sobre la OBRA DE FICCIÓN de un autor.
+- ensayo_literario: ensayo, reflexión, crónica de ideas (incluso con ficción especulativa como eje).
+- literatura_traducida / literatura_local: según origen del autor/obra respecto al mercado del medio.
+- mundo_editorial: industria (fusiones, sellos, ventas, nombramientos editoriales).
+
+Ejemplos correctos:
+- Entrevista con Nina Lykke sobre su novela → ["ficcion", "literatura_traducida"]
+- Memoria de un editor → ["no_ficcion", "mundo_editorial"]
+- Ensayo especulativo sobre Barcelona 2131 → ["ensayo_literario", "ficcion"]
+- Venta de derechos de traducción → ["derechos_traducciones", "mundo_editorial"]
+
+Ejemplos incorrectos (evitar):
+- Reseña o entrevista sobre novela → NO marcar no_ficcion
+- Noticia de premio literario → ferias_premios, no no_ficcion salvo que sea biografía del ganador
 
 Alcance editorial (en_alcance = true) — INCLUIR:
 - Libros, novelas, poesía, ensayo literario o cultural con eje en libros/lectura
@@ -292,6 +311,19 @@ def classify_article(
             )
             block = next(b for b in response.content if b.type == "text")
             result = _parse_response(block.text)
+            result = ClassificationResult(
+                categoria=result.categoria,
+                relevance_score=result.relevance_score,
+                resumen_generado=result.resumen_generado,
+                titular_traducido=result.titular_traducido,
+                tags=refine_tags(
+                    titulo=titulo,
+                    resumen=resumen,
+                    resumen_generado=result.resumen_generado,
+                    tags=result.tags,
+                ),
+                en_alcance=result.en_alcance,
+            )
             if not is_editorial_scope(
                 titulo=titulo,
                 titular_traducido=result.titular_traducido,
