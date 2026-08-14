@@ -5,7 +5,9 @@ from __future__ import annotations
 import asyncio
 import logging
 import re
+from datetime import datetime
 from functools import partial
+from io import BytesIO
 
 from telegram import Update
 from telegram.constants import ParseMode
@@ -19,7 +21,13 @@ from bot.restart_service import detect_restart_method, restart_bot, restart_meth
 from ai.classify import active_model, active_provider
 from bot.version import BOT_VERSION
 from db.models import ReportFilter
-from reports.generator import mark_articles_sent, record_informe, split_message
+from reports.generator import (
+    _fetch_articles,
+    mark_articles_sent,
+    record_informe,
+    split_message,
+)
+from reports.markdown_export import build_markdown_report, markdown_filename
 from reports.pipeline import build_editorial_report
 from reports.paises import list_available_locations
 from reports.session import load_session
@@ -75,6 +83,8 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
         "/informe <días> <país|tag> — ej. /informe 7 alemania · /informe 7 ficcion\n"
         "/tag <tag> <días> [<país>] — ej. /tag poesia 7 · /tag ferias_premios 14 españa\n"
         "/informe_mas — continuar el informe anterior\n"
+        "/informe_md — descargar informe en Markdown (.md)\n"
+        "/descargar — Markdown del último informe generado\n"
         "/paises — países y regiones\n"
         "/tags — categorías editoriales\n"
         "/reclasificar — reclasificar todos los artículos (tags + resúmenes)\n"
@@ -311,6 +321,87 @@ async def tags_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
         await update.message.reply_text(chunk, disable_web_page_preview=True)
 
 
+async def _reply_markdown_document(
+    message,
+    *,
+    articles: list[dict],
+    mode: str,
+    report_filter: ReportFilter | None,
+) -> None:
+    md = build_markdown_report(articles, mode=mode, report_filter=report_filter)
+    filename = markdown_filename(mode=mode, report_filter=report_filter)
+    payload = BytesIO(md.encode("utf-8"))
+    payload.name = filename
+    await message.reply_document(
+        document=payload,
+        filename=filename,
+        caption=f"📄 Informe Markdown — {len(articles)} artículo(s)",
+    )
+
+
+async def informe_md_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    args = context.args or []
+    try:
+        parsed = parse_command_args(args)
+    except ValueError as exc:
+        if update.message:
+            await update.message.reply_text(str(exc))
+        return
+
+    if parsed:
+        report_filter = _filter_from_parsed(parsed)
+        await _send_report(
+            update,
+            mode="informe_pais",
+            record=False,
+            report_filter=report_filter,
+            markdown_only=True,
+        )
+    else:
+        await _send_report(update, mode="informe", record=False, markdown_only=True)
+
+
+async def descargar_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    if not update.message or not update.effective_chat:
+        return
+    if not is_authorized(update):
+        await update.message.reply_text(
+            unauthorized_message(str(update.effective_chat.id))
+        )
+        return
+
+    chat_id = str(update.effective_chat.id)
+    session = load_session(chat_id)
+    if not session or not session.article_ids:
+        await update.message.reply_text(
+            "No hay un informe reciente para descargar.\n"
+            "Genera uno con /informe o /informe_md."
+        )
+        return
+
+    try:
+        since = datetime.fromisoformat(session.since_iso)
+        articles = await asyncio.to_thread(
+            _fetch_articles,
+            since,
+            include_sent=session.include_sent,
+            report_filter=session.report_filter,
+            article_ids=session.article_ids,
+        )
+        if not articles:
+            await update.message.reply_text("El informe guardado no tiene artículos exportables.")
+            return
+        await _reply_markdown_document(
+            update.message,
+            articles=articles,
+            mode=session.mode,
+            report_filter=session.report_filter,
+        )
+    except Exception as exc:
+        logger.exception("Markdown download failed")
+        await update.message.reply_text(f"Error al generar el Markdown: {exc}")
+
+
 async def informe_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     args = context.args or []
     try:
@@ -427,6 +518,8 @@ async def _send_report(
     mode: str,
     record: bool,
     report_filter: ReportFilter | None = None,
+    *,
+    markdown_only: bool = False,
 ) -> None:
     if not update.message or not update.effective_chat:
         return
@@ -438,8 +531,9 @@ async def _send_report(
         return
 
     chat_id = str(update.effective_chat.id)
+    label = "Markdown" if markdown_only else "informe"
     await update.message.reply_text(
-        f"Clasificando y generando informe{_filter_label(report_filter)}…"
+        f"Clasificando y generando {label}{_filter_label(report_filter)}…"
     )
 
     try:
@@ -451,10 +545,35 @@ async def _send_report(
                 chat_id=chat_id,
             )
         )
+
+        export_articles = report.export_articles or []
+        if markdown_only:
+            if not export_articles:
+                await update.message.reply_text(
+                    "Informe vacío — no hay artículos para exportar en Markdown."
+                )
+                return
+            await _reply_markdown_document(
+                update.message,
+                articles=export_articles,
+                mode=report.mode,
+                report_filter=report_filter,
+            )
+            if not export_articles:
+                logger.info("Empty markdown export for mode=%s filter=%s", mode, report_filter)
+            return
+
         chunks = split_message(report.text)
 
         for chunk in chunks:
             await _reply_report_chunk(update.message, chunk)
+
+        if report.has_more and export_articles:
+            await update.message.reply_text(
+                f"Informe truncado en Telegram ({len(report.article_ids)} de "
+                f"{len(export_articles)} artículos).\n"
+                "Usa /informe_md o /descargar para el Markdown completo."
+            )
 
         if record and report.article_ids:
             if report.has_more:

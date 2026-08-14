@@ -48,6 +48,7 @@ class ReportResult:
     remaining_count: int = 0
     untranslated_count: int = 0
     word_count: int = 0
+    export_articles: list[dict] | None = None
 
 
 def _relevance_tiers() -> list[tuple[int, str, int]]:
@@ -1058,6 +1059,7 @@ def build_report(
         remaining_count=max(0, total - new_cursor),
         untranslated_count=untranslated,
         word_count=_word_count(text),
+        export_articles=ordered if ordered else None,
     )
 
 

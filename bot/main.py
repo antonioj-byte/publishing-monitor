@@ -25,6 +25,8 @@ from bot.telegram_handlers import (
     informe_command,
     informe_hoy_command,
     informe_mas_command,
+    informe_md_command,
+    descargar_command,
     paises_command,
     ping_command,
     reclasificar_command,
@@ -220,6 +222,8 @@ def build_application() -> Application:
     app.add_handler(CommandHandler("informe", informe_command))
     app.add_handler(CommandHandler("informe_hoy", informe_hoy_command))
     app.add_handler(CommandHandler("informe_mas", informe_mas_command))
+    app.add_handler(CommandHandler("informe_md", informe_md_command))
+    app.add_handler(CommandHandler("descargar", descargar_command))
     app.add_handler(CommandHandler("paises", paises_command))
     app.add_handler(CommandHandler("tags", tags_command))
     app.add_handler(CommandHandler("tag", tag_command))
@@ -253,6 +257,8 @@ async def main_async() -> None:
                 BotCommand("informe", "Informe editorial"),
                 BotCommand("informe_hoy", "Informe de hoy"),
                 BotCommand("informe_mas", "Continuar informe anterior"),
+                BotCommand("informe_md", "Descargar informe en Markdown"),
+                BotCommand("descargar", "Markdown del último informe"),
                 BotCommand("tags", "Categorías editoriales"),
                 BotCommand("tag", "Informe por tag: /tag ficcion 7"),
                 BotCommand("paises", "Países y regiones"),
