@@ -6,33 +6,16 @@ from __future__ import annotations
 import argparse
 import logging
 import sys
-import time
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from ai.classify import classify_pending
 from bot.config import settings
+from bot.reclassify_service import run_reclassify_all
 from db.connection import get_connection, init_schema
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(message)s")
 logger = logging.getLogger(__name__)
-
-
-def reset_all() -> int:
-    with get_connection() as conn:
-        count = conn.execute("SELECT COUNT(*) FROM articulos").fetchone()[0]
-        conn.execute(
-            """
-            UPDATE articulos SET
-                procesado = 0,
-                resumen_generado = NULL,
-                titular_traducido = NULL,
-                relevance_score = NULL
-            """
-        )
-        conn.commit()
-    return count
 
 
 def main() -> None:
@@ -73,42 +56,20 @@ def main() -> None:
         sys.exit(1)
 
     if not args.yes:
-        print(f"Se resetearán y reclasificarán {total} artículos.")
+        print(f"Se resetearán y reclasificarán {total} artículos (con tags).")
         answer = input("¿Continuar? [y/N] ").strip().lower()
         if answer not in ("y", "yes", "s", "si", "sí"):
             print("Cancelado.")
             sys.exit(0)
 
-    reset = reset_all()
-    logger.info("Reset %d artículos", reset)
-
-    classified_total = 0
-    failed_total = 0
-    batch_num = 0
-
-    while True:
-        batch_num += 1
-        stats = classify_pending(limit=args.batch_size)
-        classified_total += stats["classified"]
-        failed_total += stats["failed"]
-
-        logger.info(
-            "Lote %d: +%d clasificados, %d fallidos, %d pendientes",
-            batch_num,
-            stats["classified"],
-            stats["failed"],
-            stats["remaining"],
-        )
-
-        if stats["remaining"] == 0 or stats["classified"] == 0:
-            break
-
-        if settings.anthropic_api_key and args.delay > 0:
-            time.sleep(args.delay)
-
+    stats = run_reclassify_all(
+        batch_size=args.batch_size,
+        delay=args.delay,
+        reset=True,
+    )
     print(
-        f"\nListo: {classified_total} reclasificados, {failed_total} fallidos "
-        f"de {total} totales"
+        f"\nListo: {stats['classified']} reclasificados, {stats['failed']} fallidos "
+        f"de {stats['total']} totales"
     )
 
 

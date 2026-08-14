@@ -264,6 +264,23 @@ def classify_article(
                 idioma=idioma,
                 reason="auth",
             )
+        except anthropic.BadRequestError as exc:
+            if "credit balance" in str(exc).lower():
+                _API_AUTH_FAILED = True
+                logger.error(
+                    "Créditos de Anthropic agotados; el pipeline continuará "
+                    "con clasificación offline (sin tags). Recarga créditos en "
+                    "console.anthropic.com y ejecuta /reclasificar.",
+                    exc_info=exc,
+                )
+                return classify_offline(
+                    titulo=titulo,
+                    resumen=resumen,
+                    categoria_default=categoria_default,
+                    idioma=idioma,
+                    reason="auth",
+                )
+            raise
         except anthropic.NotFoundError:
             continue
         except anthropic.APIError:

@@ -71,7 +71,8 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
         "/tag <tag> <días> [<país>] — ej. /tag poesia 7 · /tag ferias_premios 14 españa\n"
         "/informe_mas — continuar el informe anterior\n"
         "/paises — países y regiones\n"
-        "/tags — categorías editoriales\n\n"
+        "/tags — categorías editoriales\n"
+        "/reclasificar — reclasificar todos los artículos (tags + resúmenes)\n\n"
         "Los informes tienen un máximo de ~2.500 palabras.\n"
         "Si hay más contenido, usa /informe_mas.\n\n"
         "También en texto libre:\n"
@@ -92,6 +93,60 @@ async def ping_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
 
 async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     await start_command(update, context)
+
+
+_RECLASSIFY_RUNNING = False
+
+
+async def reclasificar_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    global _RECLASSIFY_RUNNING
+    if not update.message:
+        return
+    if not is_authorized(update):
+        await update.message.reply_text(
+            unauthorized_message(update.effective_chat.id if update.effective_chat else "?")
+        )
+        return
+    if _RECLASSIFY_RUNNING:
+        await update.message.reply_text(
+            "Ya hay una reclasificación en curso. Espera a que termine."
+        )
+        return
+
+    from bot.reclassify_service import run_reclassify_all
+
+    _RECLASSIFY_RUNNING = True
+    await update.message.reply_text(
+        "Reclasificación iniciada (todos los artículos, con tags).\n"
+        "Puede tardar 1-2 horas. Te aviso cuando termine.\n"
+        "El bot sigue respondiendo a /ping mientras tanto."
+    )
+
+    async def _job() -> None:
+        global _RECLASSIFY_RUNNING
+        try:
+            stats = await asyncio.to_thread(
+                run_reclassify_all,
+                batch_size=20,
+                delay=0.25,
+                reset=True,
+            )
+            text = (
+                f"Reclasificación terminada.\n"
+                f"Total: {stats['total']}\n"
+                f"Clasificados: {stats['classified']}\n"
+                f"Fallidos: {stats['failed']}\n"
+                f"Lotes: {stats['batches']}"
+            )
+        except Exception as exc:
+            logger.exception("Reclassification failed")
+            text = f"Error en reclasificación: {exc}"
+        finally:
+            _RECLASSIFY_RUNNING = False
+        if update.message:
+            await update.message.reply_text(text)
+
+    asyncio.create_task(_job())
 
 
 async def paises_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
