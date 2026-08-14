@@ -4,9 +4,10 @@ Tiempo estimado: **20–30 minutos**. Solo navegador + Telegram en el móvil.
 
 ## Antes de empezar — ten a mano
 
-Abre tu `.env` del proyecto (o anota estos tres valores):
+Abre tu `.env` del proyecto (o anota estos valores):
 
-- `ANTHROPIC_API_KEY` (empieza por `sk-ant-...`)
+- `GOOGLE_API_KEY` (recomendado, ~10× más barato — https://aistudio.google.com/apikey)
+  y `CLASSIFY_PROVIDER=gemini`, **o** `ANTHROPIC_API_KEY` (empieza por `sk-ant-...`)
 - `TELEGRAM_BOT_TOKEN`
 - `TELEGRAM_CHAT_ID` (tu número, ej. `1141602138`)
 
@@ -34,12 +35,16 @@ Solo **una** instancia puede usar el token.
 En el servicio → pestaña **Variables** → **Add Variable** (o Raw Editor):
 
 ```
-ANTHROPIC_API_KEY=pega_tu_clave
+GOOGLE_API_KEY=pega_tu_clave_de_google
+CLASSIFY_PROVIDER=gemini
 TELEGRAM_BOT_TOKEN=pega_tu_token
 TELEGRAM_CHAT_ID=pega_tu_chat_id
 DATABASE_PATH=/app/data/editorial.db
 TIMEZONE=Europe/Madrid
 ```
+
+Si prefieres Anthropic en vez de Gemini, usa `ANTHROPIC_API_KEY=sk-ant-...` y
+`CLASSIFY_PROVIDER=anthropic` (o simplemente omite `GOOGLE_API_KEY`).
 
 Guarda. Railway redeployará solo.
 
