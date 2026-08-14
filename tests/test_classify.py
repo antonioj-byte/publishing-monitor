@@ -60,6 +60,27 @@ class ClassificationFallbackTests(unittest.TestCase):
         self.assertEqual(factory.call_count, 1)
         self.assertTrue(classify._API_AUTH_FAILED)
 
+    def test_invalid_api_key_raises_when_offline_disabled(self) -> None:
+        classify._API_AUTH_FAILED = True
+        api_settings = replace(settings, anthropic_api_key="invalid")
+
+        with patch("ai.classify.settings", api_settings):
+            with self.assertRaises(RuntimeError):
+                classify.classify_article(
+                    titulo="New publishing merger",
+                    resumen="Two book publishers combine their imprints.",
+                    medio="Publishers Weekly",
+                    categoria_default="noticias",
+                    idioma="en",
+                    allow_offline=False,
+                )
+
+    def test_verify_anthropic_api_rejects_missing_key(self) -> None:
+        offline_settings = replace(settings, anthropic_api_key="")
+        with patch("ai.classify.settings", offline_settings):
+            with self.assertRaises(RuntimeError):
+                classify.verify_anthropic_api()
+
     def test_pending_classification_can_be_scoped_to_country_window(self) -> None:
         with TemporaryDirectory() as temp_dir:
             db_path = Path(temp_dir) / "test.db"

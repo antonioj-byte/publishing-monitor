@@ -173,13 +173,25 @@ async def reclasificar_command(update: Update, context: ContextTypes.DEFAULT_TYP
                 delay=0.25,
                 reset=True,
             )
-            text = (
-                f"Reclasificación terminada.\n"
-                f"Total: {stats['total']}\n"
-                f"Clasificados: {stats['classified']}\n"
-                f"Fallidos: {stats['failed']}\n"
-                f"Lotes: {stats['batches']}"
-            )
+            if stats["with_tags"] == 0:
+                text = (
+                    "Reclasificación abortada o sin tags.\n"
+                    f"Total en BD: {stats['total']}\n"
+                    f"Con tags: {stats['with_tags']}\n"
+                    f"Fallidos: {stats['failed']}\n\n"
+                    "Revisa créditos de Anthropic en Railway "
+                    "(console.anthropic.com → Plans & Billing) "
+                    "y vuelve a ejecutar /reclasificar."
+                )
+            else:
+                text = (
+                    f"Reclasificación terminada.\n"
+                    f"Total: {stats['total']}\n"
+                    f"Con tags: {stats['with_tags']}\n"
+                    f"Clasificados: {stats['classified']}\n"
+                    f"Fallidos: {stats['failed']}\n"
+                    f"Lotes: {stats['batches']}"
+                )
         except Exception as exc:
             logger.exception("Reclassification failed")
             text = f"Error en reclasificación: {exc}"

@@ -24,6 +24,59 @@ MODEL = "claude-haiku-4-5"
 FALLBACK_MODEL = "claude-sonnet-5"
 _API_AUTH_FAILED = False
 
+
+def reset_api_auth_state() -> None:
+    global _API_AUTH_FAILED
+    _API_AUTH_FAILED = False
+
+
+def verify_anthropic_api() -> None:
+    """Raise RuntimeError if Anthropic cannot classify (key, credits, models)."""
+    reset_api_auth_state()
+    if not settings.anthropic_api_key:
+        raise RuntimeError(
+            "ANTHROPIC_API_KEY no configurada. Añádela en Railway → Variables."
+        )
+
+    client = anthropic.Anthropic(api_key=settings.anthropic_api_key)
+    last_error: Exception | None = None
+    for model in (MODEL, FALLBACK_MODEL):
+        try:
+            client.messages.create(
+                model=model,
+                max_tokens=20,
+                messages=[{"role": "user", "content": "Responde solo: ok"}],
+            )
+            return
+        except anthropic.AuthenticationError as exc:
+            raise RuntimeError(
+                "ANTHROPIC_API_KEY inválida. Renueva la clave en console.anthropic.com."
+            ) from exc
+        except anthropic.BadRequestError as exc:
+            if "credit balance" in str(exc).lower():
+                raise RuntimeError(
+                    "Créditos de Anthropic agotados. Recarga en "
+                    "console.anthropic.com → Plans & Billing."
+                ) from exc
+            raise RuntimeError(f"Anthropic rechazó la petición: {exc}") from exc
+        except anthropic.NotFoundError as exc:
+            last_error = exc
+            continue
+        except anthropic.APIError as exc:
+            last_error = exc
+            if model == FALLBACK_MODEL:
+                raise RuntimeError(f"Anthropic API error: {exc}") from exc
+            continue
+
+    raise RuntimeError(f"Ningún modelo Anthropic disponible: {last_error}")
+
+
+def _api_unavailable_error(reason: str) -> RuntimeError:
+    return RuntimeError(
+        "Anthropic API no disponible para reclasificación con tags "
+        f"({reason}). Revisa ANTHROPIC_API_KEY y créditos en console.anthropic.com."
+    )
+
 SYSTEM_PROMPT_BASE = """Eres un asistente editorial especializado en libros, literatura e industria editorial.
 
 Tu misión: redactar píldoras informativas precisas que den una imagen fiel de lo ocurrido en el mundo editorial en las últimas horas — qué ha pasado, por qué importa y desde qué ángulo lo cuenta cada medio.
@@ -195,10 +248,14 @@ def classify_article(
     idioma: str,
     medio_tier: int = 2,
     fecha_publicacion: str | None = None,
+    allow_offline: bool = True,
 ) -> ClassificationResult:
     global _API_AUTH_FAILED
 
     if not settings.anthropic_api_key or _API_AUTH_FAILED:
+        if not allow_offline:
+            reason = "sin clave" if not settings.anthropic_api_key else "API caída"
+            raise _api_unavailable_error(reason)
         if not settings.anthropic_api_key:
             logger.warning(
                 "ANTHROPIC_API_KEY missing — using offline classification"
@@ -257,6 +314,8 @@ def classify_article(
                 "con clasificación offline. Actualiza .env y reinicia el bot.",
                 exc_info=exc,
             )
+            if not allow_offline:
+                raise _api_unavailable_error("clave inválida") from exc
             return classify_offline(
                 titulo=titulo,
                 resumen=resumen,
@@ -273,6 +332,8 @@ def classify_article(
                     "console.anthropic.com y ejecuta /reclasificar.",
                     exc_info=exc,
                 )
+                if not allow_offline:
+                    raise _api_unavailable_error("créditos agotados") from exc
                 return classify_offline(
                     titulo=titulo,
                     resumen=resumen,
@@ -298,8 +359,9 @@ def classify_pending(
     report_filter: ReportFilter | None = None,
     since_iso: str | None = None,
     date_by_publication: bool = False,
+    require_tags: bool = False,
 ) -> dict[str, int]:
-    stats = {"classified": 0, "failed": 0, "remaining": 0}
+    stats = {"classified": 0, "failed": 0, "remaining": 0, "no_tags": 0}
     use_api = bool(settings.anthropic_api_key)
     conditions = ["a.procesado = 0"]
     params: list[object] = []
@@ -346,7 +408,12 @@ def classify_pending(
                     idioma=row["idioma"],
                     medio_tier=get_tier(row["medio_nombre"], row["categoria_default"]),
                     fecha_publicacion=row["fecha_publicacion"],
+                    allow_offline=not require_tags,
                 )
+                if require_tags and not result.tags:
+                    stats["no_tags"] += 1
+                    stats["failed"] += 1
+                    continue
                 conn.execute(
                     """
                     UPDATE articulos SET
