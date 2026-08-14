@@ -5,13 +5,14 @@ from __future__ import annotations
 import asyncio
 import logging
 import sys
+import time
 
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.cron import CronTrigger
 from telegram.ext import Application, CommandHandler, MessageHandler, filters
 from zoneinfo import ZoneInfo
 
-from ai.classify import classify_all_pending
+from ai.classify import classify_pending
 from bot.config import settings
 from bot.telegram_handlers import (
     free_text_report,
@@ -19,12 +20,14 @@ from bot.telegram_handlers import (
     informe_hoy_command,
     informe_mas_command,
     paises_command,
+    ping_command,
     start_command,
 )
 from db.connection import init_schema
 from ingest.runner import ingest_all
 from reports.generator import mark_articles_sent, record_informe, split_message
 from reports.pipeline import build_editorial_report
+from reports.prioritize import _compute_embeddings
 from reports.session import load_session
 
 logging.basicConfig(
@@ -32,6 +35,12 @@ logging.basicConfig(
     format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
 )
 logger = logging.getLogger(__name__)
+
+_JOB_DEFAULTS = {
+    "max_instances": 1,
+    "coalesce": True,
+    "misfire_grace_time": 300,
+}
 
 
 async def job_ingest() -> None:
@@ -41,13 +50,14 @@ async def job_ingest() -> None:
 
 
 async def job_classify() -> None:
-    logger.info("Starting scheduled classification")
-    stats = await asyncio.to_thread(classify_all_pending)
-    logger.info("Classification done: %s", stats)
+    """Classify one batch so scheduled work does not monopolize the process."""
+    logger.info("Starting scheduled classification batch")
+    stats = await asyncio.to_thread(classify_pending, limit=30)
+    logger.info("Classification batch done: %s", stats)
 
 
 async def job_cierre() -> None:
-    logger.info("Starting cierre (ingest + classify)")
+    logger.info("Starting cierre (ingest + classify batch)")
     await job_ingest()
     await job_classify()
 
@@ -105,25 +115,32 @@ async def job_informe_automatico(app: Application) -> None:
     logger.info("Automatic report sent (%d articles)", sent_count)
 
 
+async def _prewarm_embeddings_background() -> None:
+    try:
+        await asyncio.to_thread(
+            _compute_embeddings,
+            ["editorial news warmup"],
+        )
+        logger.info("Embedding model prewarmed")
+    except Exception:
+        logger.exception("Embedding prewarm failed")
+
+
 def setup_scheduler(app: Application) -> AsyncIOScheduler:
     tz = ZoneInfo(settings.timezone)
-    scheduler = AsyncIOScheduler(timezone=tz)
+    scheduler = AsyncIOScheduler(timezone=tz, job_defaults=_JOB_DEFAULTS)
 
-    # Ingest every 3 hours between 08:00 and 23:00
     for hour in (8, 11, 14, 17, 20, 23):
         scheduler.add_job(job_ingest, CronTrigger(hour=hour, minute=0, timezone=tz))
 
-    # Cierre at 06:00
     scheduler.add_job(job_cierre, CronTrigger(hour=6, minute=0, timezone=tz))
 
-    # Automatic report at 06:30
     scheduler.add_job(
         job_informe_automatico,
         CronTrigger(hour=6, minute=30, timezone=tz),
         args=[app],
     )
 
-    # Classify after each ingest window (offset 15 min)
     for hour in (8, 11, 14, 17, 20, 23):
         scheduler.add_job(job_classify, CronTrigger(hour=hour, minute=15, timezone=tz))
 
@@ -151,9 +168,11 @@ def build_application() -> Application:
     app = (
         Application.builder()
         .token(settings.telegram_bot_token)
+        .concurrent_updates(True)
         .build()
     )
     app.add_handler(CommandHandler("start", start_command))
+    app.add_handler(CommandHandler("ping", ping_command))
     app.add_handler(CommandHandler("informe", informe_command))
     app.add_handler(CommandHandler("informe_hoy", informe_hoy_command))
     app.add_handler(CommandHandler("informe_mas", informe_mas_command))
@@ -168,15 +187,26 @@ def build_application() -> Application:
 
 
 async def main_async() -> None:
+    started = time.monotonic()
     init_schema()
     app = build_application()
-    scheduler = setup_scheduler(app)
-    scheduler.start()
 
     logger.info("Bot starting (timezone=%s, chat_id=%s)", settings.timezone, settings.telegram_chat_id)
     async with app:
         await app.start()
-        await app.updater.start_polling(drop_pending_updates=True)
+        await app.updater.start_polling(
+            drop_pending_updates=False,
+            poll_interval=0.5,
+        )
+        logger.info(
+            "Polling activo — bot listo en %.1fs",
+            time.monotonic() - started,
+        )
+
+        scheduler = setup_scheduler(app)
+        scheduler.start()
+        asyncio.create_task(_prewarm_embeddings_background())
+
         try:
             while True:
                 await asyncio.sleep(3600)

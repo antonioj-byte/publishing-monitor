@@ -35,6 +35,8 @@ def build_editorial_report(
             report_filter=report_filter,
             since_iso=since.astimezone(ZoneInfo("UTC")).isoformat(),
             date_by_publication=resolved_mode in ("informe_pais", "informe_hoy"),
+            batch_size=20,
+            max_batches=5,
         )
         logger.info(
             "Pipeline classify: %d classified, %d failed, %d remaining",

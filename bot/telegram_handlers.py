@@ -38,6 +38,7 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
     await update.message.reply_text(
         "Bot editorial activo.\n\n"
         "Comandos:\n"
+        "/ping — comprobar latencia\n"
         "/informe — informe desde el último cierre (o 24h)\n"
         "/informe_hoy — solo lo recopilado hoy\n"
         "/informe <días> <país> — ej. /informe 7 alemania\n"
@@ -48,6 +49,17 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
         "También en texto libre:\n"
         "«informe últimos 7 días en alemania»"
     )
+
+
+async def ping_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    if not update.message:
+        return
+    if not is_authorized(update):
+        await update.message.reply_text(
+            unauthorized_message(update.effective_chat.id if update.effective_chat else "?")
+        )
+        return
+    await update.message.reply_text("pong — bot operativo")
 
 
 async def paises_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
