@@ -233,7 +233,7 @@ def resolve_location(name: str) -> tuple[str | None, str | None, str]:
             target = matches[0][1]
         else:
             raise ValueError(
-                f"No reconozco «{name}». Usa /paises para ver opciones."
+                    f"No reconozco «{name}». Usa /tags para ver opciones."
             )
 
     if target.startswith("@"):

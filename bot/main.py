@@ -254,16 +254,13 @@ async def main_async() -> None:
             [
                 BotCommand("start", "Ayuda y comandos"),
                 BotCommand("ping", "Comprobar que el bot responde"),
-                BotCommand("informe", "Informe editorial"),
+                BotCommand("informe", "Informe editorial (/informe 7 ficcion)"),
                 BotCommand("informe_hoy", "Informe de hoy"),
                 BotCommand("informe_mas", "Continuar informe anterior"),
                 BotCommand("informe_md", "Descargar informe en Markdown"),
                 BotCommand("descargar", "Markdown del último informe"),
-                BotCommand("tags", "Categorías editoriales"),
-                BotCommand("tag", "Informe por tag: /tag ficcion 7"),
-                BotCommand("paises", "Países y regiones"),
-                BotCommand("reclasificar", "Reclasificar todos con tags"),
-                BotCommand("retag", "Tags solo en artículos sin ellos"),
+                BotCommand("tags", "Tags editoriales y países"),
+                BotCommand("reclasificar", "Reclasificar artículos sin tags"),
                 BotCommand("reiniciar", "Reiniciar el bot"),
             ]
         )

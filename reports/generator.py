@@ -23,6 +23,7 @@ from reports.prioritize import (
     limit_batch_for_prioritization,
     prioritize_articles,
 )
+from reports.report_modes import ReportMode
 
 CATEGORY_HEADERS: dict[Categoria, str] = {
     "ideas": "📚 Ideas del mundo editorial",
@@ -565,7 +566,7 @@ def _fetch_articles(
 
 def _is_catalog_report(report_filter: ReportFilter | None, mode: str) -> bool:
     """Multi-day tag/country reports browse a catalog; not breaking-news digests."""
-    if mode != "informe_pais" or not report_filter:
+    if not ReportMode.from_str(mode).is_catalog or not report_filter:
         return False
     days = report_filter.days or 0
     if days <= 1:
@@ -934,8 +935,9 @@ def build_report(
     else:
         since, include_sent, resolved_mode = _resolve_window(mode, report_filter)
         mode = resolved_mode
-        use_pub_date = mode in ("informe_pais", "informe_hoy", "informe")
-        strict_publication = mode in ("informe_hoy", "informe")
+        report_mode = ReportMode.from_str(mode)
+        use_pub_date = report_mode.uses_publication_date
+        strict_publication = report_mode.strict_publication_date
         articles = _fetch_articles(
             since,
             include_sent=include_sent,
@@ -988,12 +990,10 @@ def build_report(
 
         batch, _ = limit_batch_for_prioritization(articles)
         catalog = _is_catalog_report(report_filter, mode)
-        window_days = report_filter.days if report_filter and report_filter.days else None
-        prioritization = prioritize_articles(
-            batch,
-            window_days=window_days if catalog else None,
-            catalog_mode=catalog,
+        recency_window_days = (
+            report_filter.days if catalog and report_filter and report_filter.days else None
         )
+        prioritization = prioritize_articles(batch, recency_window_days=recency_window_days)
         if not prioritization.articles and not catalog:
             now = _tz_now()
             lines = _header_lines(mode, report_filter, now)

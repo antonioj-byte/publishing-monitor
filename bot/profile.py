@@ -10,7 +10,7 @@ logger = logging.getLogger(__name__)
 
 BOT_DESCRIPTION = (
     "Informes editoriales sobre libros, literatura e industria editorial. "
-    "Comandos: /informe · /tags · /tag · /paises"
+    "Comandos: /informe · /tags · /reclasificar"
 )
 
 BOT_SHORT_DESCRIPTION = "Informes editoriales de libros y publishing"

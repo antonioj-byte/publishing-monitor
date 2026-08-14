@@ -6,10 +6,11 @@ import sqlite3
 import unittest
 from contextlib import contextmanager
 from dataclasses import replace
-from datetime import datetime
+from datetime import datetime, timedelta
 from pathlib import Path
 from tempfile import TemporaryDirectory
 from unittest.mock import patch
+from zoneinfo import ZoneInfo
 
 from bot.config import settings
 from db.models import ReportFilter
@@ -21,6 +22,7 @@ from reports.generator import (
     _fetch_articles,
     _is_catalog_report,
     _order_catalog_articles,
+    build_report,
     split_message,
 )
 
@@ -288,6 +290,124 @@ class EmptyTagMessageTests(unittest.TestCase):
         self.assertIn("sin tags editoriales", message)
         self.assertNotIn("país", message.lower())
         self.assertNotIn("run_ingest_once", message)
+
+
+class CatalogReportIntegrationTests(unittest.TestCase):
+    """End-to-end regression test for /informe 7 ficcion (multi-day tag catalog)."""
+
+    def _build_db(self, db_path: Path, *, num_articles: int, num_medios: int) -> None:
+        conn = sqlite3.connect(db_path)
+        conn.executescript(
+            """
+            CREATE TABLE medios (
+                id INTEGER PRIMARY KEY,
+                nombre TEXT,
+                categoria_default TEXT,
+                tier INTEGER,
+                pais TEXT,
+                region TEXT,
+                activo INTEGER DEFAULT 1
+            );
+            CREATE TABLE informes (
+                id INTEGER PRIMARY KEY,
+                fecha_cierre TEXT
+            );
+            CREATE TABLE articulos (
+                id INTEGER PRIMARY KEY,
+                medio_id INTEGER,
+                titulo_original TEXT,
+                resumen_raw TEXT,
+                titular_traducido TEXT,
+                resumen_generado TEXT,
+                url TEXT,
+                categoria TEXT,
+                idioma TEXT,
+                fecha_publicacion TEXT,
+                fecha_ingesta TEXT,
+                procesado INTEGER,
+                relevance_score INTEGER,
+                tags TEXT,
+                enviado INTEGER DEFAULT 0
+            );
+            """
+        )
+        now = datetime.now(ZoneInfo("Europe/Madrid"))
+        for m in range(1, num_medios + 1):
+            conn.execute(
+                "INSERT INTO medios VALUES (?,?,?,?,?,?,1)",
+                (m, f"Medio {m}", "noticias", 1, "uk", "eu"),
+            )
+        for i in range(1, num_articles + 1):
+            age_days = 1 + (i % 6)  # spread across the 7-day window
+            medio_id = ((i - 1) % num_medios) + 1
+            when = (now - timedelta(days=age_days)).isoformat()
+            conn.execute(
+                """
+                INSERT INTO articulos VALUES (?,?,?,?,?,?,?,?,?,?,?,1,4,?,0)
+                """,
+                (
+                    i,
+                    medio_id,
+                    f"Fiction review {i} about a distinct novel",
+                    f"A review of a different novel, book number {i}.",
+                    f"Reseña de ficción {i}",
+                    f"Resumen distinto de la reseña número {i} sobre un libro diferente.",
+                    f"https://example.com/{i}",
+                    "noticias",
+                    "en",
+                    when,
+                    when,
+                    '["ficcion"]',
+                ),
+            )
+        conn.commit()
+        conn.close()
+
+    def test_seven_day_tag_report_returns_more_than_ten_articles(self) -> None:
+        """Regression test: /informe 7 ficcion used to collapse ~15 matches to 2-3."""
+        with TemporaryDirectory() as temp_dir:
+            db_path = Path(temp_dir) / "test.db"
+            self._build_db(db_path, num_articles=15, num_medios=8)
+
+            @contextmanager
+            def test_connection():
+                test_conn = sqlite3.connect(db_path)
+                test_conn.row_factory = sqlite3.Row
+                try:
+                    yield test_conn
+                finally:
+                    test_conn.close()
+
+            with patch("reports.generator.get_connection", test_connection):
+                result = build_report(
+                    mode="informe_pais",
+                    report_filter=ReportFilter(
+                        days=7, tags=["ficcion"], tag_labels=["Ficción"]
+                    ),
+                )
+
+        self.assertGreater(result.total_matched, 10)
+        self.assertEqual(result.mode, "informe_pais")
+
+    def test_daily_digest_still_filters_stale_singleton_articles(self) -> None:
+        """Same articles, but /informe (daily digest) must keep its strict threshold."""
+        with TemporaryDirectory() as temp_dir:
+            db_path = Path(temp_dir) / "test.db"
+            self._build_db(db_path, num_articles=15, num_medios=8)
+
+            @contextmanager
+            def test_connection():
+                test_conn = sqlite3.connect(db_path)
+                test_conn.row_factory = sqlite3.Row
+                try:
+                    yield test_conn
+                finally:
+                    test_conn.close()
+
+            with patch("reports.generator.get_connection", test_connection):
+                result = build_report(mode="informe")
+
+        self.assertLess(result.total_matched, 10)
 
 
 if __name__ == "__main__":
