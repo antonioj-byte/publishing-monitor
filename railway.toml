@@ -5,4 +5,4 @@ dockerfilePath = "Dockerfile"
 [deploy]
 restartPolicyType = "ON_FAILURE"
 restartPolicyMaxRetries = 10
-# Redeploy trigger: /reiniciar + tag fixes + pub dates — 2026-08-14
+# Redeploy trigger: reclassify API check + tags — 2026-08-14

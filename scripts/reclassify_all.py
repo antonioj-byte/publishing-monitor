@@ -68,8 +68,8 @@ def main() -> None:
         reset=True,
     )
     print(
-        f"\nListo: {stats['classified']} reclasificados, {stats['failed']} fallidos "
-        f"de {stats['total']} totales"
+        f"\nListo: {stats['with_tags']} con tags, {stats['classified']} reclasificados, "
+        f"{stats['failed']} fallidos de {stats['total']} totales"
     )
 
 
