@@ -5,4 +5,4 @@ dockerfilePath = "Dockerfile"
 [deploy]
 restartPolicyType = "ON_FAILURE"
 restartPolicyMaxRetries = 10
-# Redeploy trigger: fix Gemini client lifecycle — 2026-08-14
+# Redeploy trigger: update Gemini fallback model — 2026-08-14

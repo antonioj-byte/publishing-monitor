@@ -22,7 +22,7 @@ from dataclasses import replace
 class GeminiProviderTests(unittest.TestCase):
     def _provider(self, api_key: str = "test-key") -> GeminiProvider:
         return GeminiProvider(
-            api_key=api_key, model="gemini-2.5-flash", fallback_model="gemini-2.5-flash-lite"
+            api_key=api_key, model="gemini-2.5-flash", fallback_model="gemini-3.1-flash-lite"
         )
 
     def test_generate_json_returns_response_text(self) -> None:
@@ -96,6 +96,30 @@ class GeminiProviderTests(unittest.TestCase):
         self.assertEqual(factory.call_count, 2)
         self.assertEqual(client.models.generate_content.call_count, 2)
 
+    def test_models_to_try_deduplicates_identical_primary_and_fallback(self) -> None:
+        provider = GeminiProvider(
+            api_key="k",
+            model="gemini-2.5-flash",
+            fallback_model="gemini-2.5-flash",
+        )
+        self.assertEqual(provider._models_to_try(), ("gemini-2.5-flash",))
+
+    def test_verify_api_reports_all_model_failures(self) -> None:
+        provider = self._provider()
+        client = Mock()
+        client.models.generate_content.side_effect = [
+            RuntimeError("primary down"),
+            RuntimeError("fallback down"),
+        ]
+
+        with patch.object(GeminiProvider, "_client", return_value=client):
+            with self.assertRaises(RuntimeError) as ctx:
+                provider.verify_api()
+
+        message = str(ctx.exception)
+        self.assertIn("primary down", message)
+        self.assertIn("fallback down", message)
+
 
 class AnthropicProviderTests(unittest.TestCase):
     def _provider(self, api_key: str = "test-key") -> AnthropicProvider:
@@ -154,7 +178,7 @@ class ProviderFactoryTests(unittest.TestCase):
             classify_provider="gemini",
             google_api_key="key",
             gemini_model="gemini-2.5-flash",
-            gemini_fallback_model="gemini-2.5-flash-lite",
+            gemini_fallback_model="gemini-3.1-flash-lite",
         )
         provider = get_provider(gemini_settings)
         self.assertIsInstance(provider, GeminiProvider)

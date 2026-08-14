@@ -57,6 +57,13 @@ class GeminiProvider:
         self._model = model
         self._fallback_model = fallback_model
 
+    def _models_to_try(self) -> tuple[str, ...]:
+        models: list[str] = []
+        for model in (self._model, self._fallback_model):
+            if model and model not in models:
+                models.append(model)
+        return tuple(models)
+
     @property
     def primary_model(self) -> str:
         return self._model
@@ -88,8 +95,8 @@ class GeminiProvider:
         from google.genai import types
 
         client = self._client()
-        last_error: Exception | None = None
-        for model in (self._model, self._fallback_model):
+        errors: list[str] = []
+        for model in self._models_to_try():
             try:
                 response = client.models.generate_content(
                     model=model,
@@ -109,10 +116,10 @@ class GeminiProvider:
                 mapped = self._classify_error(exc)
                 if mapped is not None:
                     raise mapped from exc
-                last_error = exc
+                errors.append(f"{model}: {exc}")
                 logger.warning("Gemini model %s failed: %s", model, exc)
                 continue
-        raise RuntimeError(f"Gemini classification failed: {last_error}")
+        raise RuntimeError(f"Gemini classification failed: {'; '.join(errors)}")
 
     def verify_api(self) -> None:
         from google.genai import types
@@ -123,9 +130,9 @@ class GeminiProvider:
                 f"{self.setup_url} y añádela en Railway → Variables."
             )
 
-        last_error: Exception | None = None
         client = self._client()
-        for model in (self._model, self._fallback_model):
+        errors: list[str] = []
+        for model in self._models_to_try():
             try:
                 client.models.generate_content(
                     model=model,
@@ -138,11 +145,11 @@ class GeminiProvider:
                 mapped = self._classify_error(exc)
                 if mapped is not None:
                     raise mapped from exc
-                last_error = exc
+                errors.append(f"{model}: {exc}")
                 logger.warning("Gemini model %s unavailable: %s", model, exc)
                 continue
 
-        raise RuntimeError(f"Ningún modelo Gemini disponible: {last_error}")
+        raise RuntimeError(f"Ningún modelo Gemini disponible: {'; '.join(errors)}")
 
 
 class AnthropicProvider:

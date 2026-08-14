@@ -8,6 +8,20 @@ PROJECT_ROOT = Path(__file__).resolve().parent.parent
 ENV_PATH = PROJECT_ROOT / ".env"
 load_dotenv(ENV_PATH)
 
+# Google retira modelos antiguos para cuentas nuevas; remapeamos automáticamente.
+_DEPRECATED_GEMINI_MODELS: dict[str, str] = {
+    "gemini-2.5-flash-lite": "gemini-3.1-flash-lite",
+    "gemini-2.0-flash-lite": "gemini-3.1-flash-lite",
+    "gemini-2.0-flash-lite-001": "gemini-3.1-flash-lite",
+    "gemini-2.0-flash": "gemini-2.5-flash",
+    "gemini-2.0-flash-001": "gemini-2.5-flash",
+}
+
+
+def normalize_gemini_model(name: str) -> str:
+    cleaned = name.strip()
+    return _DEPRECATED_GEMINI_MODELS.get(cleaned, cleaned)
+
 
 @dataclass(frozen=True)
 class Settings:
@@ -66,8 +80,10 @@ class Settings:
             anthropic_api_key=anthropic_api_key,
             google_api_key=google_api_key,
             classify_provider=provider,
-            gemini_model=os.getenv("GEMINI_MODEL", "gemini-2.5-flash"),
-            gemini_fallback_model=os.getenv("GEMINI_FALLBACK_MODEL", "gemini-2.5-flash-lite"),
+            gemini_model=normalize_gemini_model(os.getenv("GEMINI_MODEL", "gemini-2.5-flash")),
+            gemini_fallback_model=normalize_gemini_model(
+                os.getenv("GEMINI_FALLBACK_MODEL", "gemini-3.1-flash-lite")
+            ),
             telegram_bot_token=os.getenv("TELEGRAM_BOT_TOKEN", ""),
             telegram_chat_id=os.getenv("TELEGRAM_CHAT_ID", ""),
             database_path=os.getenv("DATABASE_PATH", "./data/editorial.db"),
