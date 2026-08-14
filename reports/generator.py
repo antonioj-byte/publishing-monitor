@@ -145,6 +145,132 @@ def _count_country_candidates(
     return in_window, pending, total_geo
 
 
+def _tag_date_expr(
+    *,
+    date_by_publication: bool,
+    strict_publication: bool,
+) -> tuple[str, str]:
+    if date_by_publication and strict_publication:
+        return "a.fecha_publicacion", "AND a.fecha_publicacion IS NOT NULL AND a.fecha_publicacion != ''"
+    if date_by_publication:
+        return (
+            "COALESCE(NULLIF(a.fecha_publicacion, ''), a.fecha_ingesta)",
+            "",
+        )
+    return "a.fecha_ingesta", ""
+
+
+def _count_tag_candidates(
+    report_filter: ReportFilter,
+    since: datetime,
+    *,
+    date_by_publication: bool,
+    strict_publication: bool = False,
+) -> tuple[int, int, int, int]:
+    """Return (with tag in window, classified in window, missing tags, pending)."""
+    since_iso = publication_since_iso(since)
+    date_expr, pub_filter = _tag_date_expr(
+        date_by_publication=date_by_publication,
+        strict_publication=strict_publication,
+    )
+    tag_keys = report_filter.tags or []
+    placeholders = ",".join("?" * len(tag_keys))
+
+    with get_connection() as conn:
+        with_tag = conn.execute(
+            f"""
+            SELECT COUNT(*) FROM articulos a
+            WHERE a.procesado = 1 AND a.relevance_score >= ?
+              {pub_filter}
+              AND {date_expr} >= ?
+              AND a.tags IS NOT NULL AND a.tags != '' AND a.tags != '[]'
+              AND EXISTS (
+                SELECT 1 FROM json_each(a.tags) je
+                WHERE je.value IN ({placeholders})
+              )
+            """,
+            (settings.min_relevance_score, since_iso, *tag_keys),
+        ).fetchone()[0]
+        in_window = conn.execute(
+            f"""
+            SELECT COUNT(*) FROM articulos a
+            WHERE a.procesado = 1 AND a.relevance_score >= ?
+              {pub_filter}
+              AND {date_expr} >= ?
+            """,
+            (settings.min_relevance_score, since_iso),
+        ).fetchone()[0]
+        missing_tags = conn.execute(
+            """
+            SELECT COUNT(*) FROM articulos
+            WHERE procesado = 1
+              AND (tags IS NULL OR tags = '' OR tags = '[]')
+            """
+        ).fetchone()[0]
+        pending = conn.execute(
+            f"""
+            SELECT COUNT(*) FROM articulos a
+            WHERE a.procesado = 0
+              {pub_filter}
+              AND {date_expr} >= ?
+            """,
+            (since_iso,),
+        ).fetchone()[0]
+    return with_tag, in_window, missing_tags, pending
+
+
+def _empty_tag_message(
+    report_filter: ReportFilter,
+    since: datetime,
+    *,
+    date_by_publication: bool,
+    strict_publication: bool = False,
+) -> str:
+    with_tag, in_window, missing_tags, pending = _count_tag_candidates(
+        report_filter,
+        since,
+        date_by_publication=date_by_publication,
+        strict_publication=strict_publication,
+    )
+    tag_label = ", ".join(report_filter.tag_labels or report_filter.tags or ["tag"])
+    lines = [
+        f"<i>No hay artículos de {esc(tag_label)} "
+        f"en los últimos {report_filter.days} días.</i>",
+        "",
+        f"En base de datos: {with_tag} con tag en ventana, "
+        f"{in_window} clasificados en ventana (cualquier tag), "
+        f"{pending} pendientes de clasificar.",
+    ]
+    if missing_tags:
+        lines.append(
+            f"{missing_tags} artículo(s) clasificados sin tags editoriales "
+            "(clasificación anterior a tags o modo offline). "
+            "Ejecuta `/reclasificar` o `python3 scripts/backfill_tags.py --yes` "
+            "y luego `python3 scripts/classify_pending.py`."
+        )
+    elif pending:
+        lines.append(
+            "Espera a que termine la clasificación o ejecuta: "
+            "`python3 scripts/classify_pending.py`"
+        )
+    elif in_window and not with_tag:
+        lines.append(
+            "Hay artículos en la ventana, pero ninguno tiene este tag. "
+            "Prueba otro periodo (`/informe 14 ficcion`) o revisa `/tags`."
+        )
+    elif with_tag:
+        lines.append(
+            "Hay artículos con este tag en ventana, pero fueron "
+            "descartados por el filtro editorial o priorización."
+        )
+    else:
+        lines.append(
+            "Prueba un periodo más amplio o revisa con "
+            "`python3 scripts/diagnose_pipeline.py 7 ficcion`."
+        )
+    return "\n".join(lines)
+
+
 def _empty_country_message(
     report_filter: ReportFilter,
     since: datetime,
@@ -634,14 +760,28 @@ def build_report(
             lines = _header_lines(mode, report_filter, now)
             lines.append("")
             if mode == "informe_pais" and report_filter:
-                lines.append(
-                    _empty_country_message(
-                        report_filter,
-                        since,
-                        date_by_publication=use_pub_date,
-                        strict_publication=strict_publication,
+                if report_filter.tags and not report_filter.pais and not report_filter.region:
+                    lines.append(
+                        _empty_tag_message(
+                            report_filter,
+                            since,
+                            date_by_publication=use_pub_date,
+                            strict_publication=strict_publication,
+                        )
                     )
-                )
+                elif report_filter.pais or report_filter.region:
+                    lines.append(
+                        _empty_country_message(
+                            report_filter,
+                            since,
+                            date_by_publication=use_pub_date,
+                            strict_publication=strict_publication,
+                        )
+                    )
+                else:
+                    lines.append(
+                        "<i>No hay artículos que cumplan los criterios en este periodo.</i>"
+                    )
             else:
                 if mode == "informe_hoy":
                     lines.append(
