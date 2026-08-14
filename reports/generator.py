@@ -23,7 +23,6 @@ from reports.prioritize import (
     limit_batch_for_prioritization,
     prioritize_articles,
 )
-from reports.tags import tag_labels as topical_tag_labels
 
 CATEGORY_HEADERS: dict[Categoria, str] = {
     "ideas": "📚 Ideas del mundo editorial",

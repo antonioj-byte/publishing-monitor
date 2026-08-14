@@ -53,18 +53,19 @@ class PublicationDateTests(unittest.TestCase):
                     fecha_publicacion TEXT,
                     fecha_ingesta TEXT,
                     procesado INTEGER,
-                    enviado INTEGER
+                    enviado INTEGER,
+                    tags TEXT
                 );
                 INSERT INTO medios VALUES (1, 'NYRB', 'us', 'us', 1);
                 INSERT INTO articulos VALUES (
                     1, 1, 'Old essay', 'Old essay', 'Summary', 'Summary', 'en',
                     'https://example.com/old', 'ideas', 4,
-                    '2026-02-01T10:00:00+00:00', '2026-08-14T10:00:00+00:00', 1, 0
+                    '2026-02-01T10:00:00+00:00', '2026-08-14T10:00:00+00:00', 1, 0, NULL
                 );
                 INSERT INTO articulos VALUES (
                     2, 1, 'Fresh piece', 'Fresh piece', 'Summary', 'Summary', 'en',
                     'https://example.com/new', 'ideas', 4,
-                    '2026-08-14T09:00:00+00:00', '2026-08-14T10:00:00+00:00', 1, 0
+                    '2026-08-14T09:00:00+00:00', '2026-08-14T10:00:00+00:00', 1, 0, NULL
                 );
                 """
             )
