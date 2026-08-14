@@ -12,10 +12,12 @@ from tempfile import TemporaryDirectory
 from unittest.mock import patch
 
 from bot.config import settings
+from db.models import ReportFilter
 from reports.generator import (
     _apply_report_limits,
     _build_pages,
     _collapse_events_for_report,
+    _empty_tag_message,
     _fetch_articles,
     split_message,
 )
@@ -172,6 +174,85 @@ class ContinuationFetchTests(unittest.TestCase):
                 )
 
         self.assertEqual([item["id"] for item in articles], [1])
+
+
+class EmptyTagMessageTests(unittest.TestCase):
+    def test_mentions_missing_tags_not_country(self) -> None:
+        with TemporaryDirectory() as temp_dir:
+            db_path = Path(temp_dir) / "test.db"
+            conn = sqlite3.connect(db_path)
+            conn.executescript(
+                """
+                CREATE TABLE medios (
+                    id INTEGER PRIMARY KEY,
+                    nombre TEXT,
+                    region TEXT,
+                    pais TEXT,
+                    tier INTEGER
+                );
+                CREATE TABLE articulos (
+                    id INTEGER PRIMARY KEY,
+                    medio_id INTEGER,
+                    titulo_original TEXT,
+                    titular_traducido TEXT,
+                    resumen_generado TEXT,
+                    resumen_raw TEXT,
+                    idioma TEXT,
+                    url TEXT,
+                    categoria TEXT,
+                    relevance_score INTEGER,
+                    fecha_publicacion TEXT,
+                    fecha_ingesta TEXT,
+                    procesado INTEGER,
+                    enviado INTEGER,
+                    tags TEXT
+                );
+                CREATE TABLE informes (
+                    id INTEGER PRIMARY KEY,
+                    fecha_cierre TEXT,
+                    tipo TEXT,
+                    articulos_incluidos TEXT,
+                    enviado_at TEXT
+                );
+                INSERT INTO medios VALUES (1, 'Publishers Weekly', 'us', 'us', 1);
+                INSERT INTO articulos VALUES (
+                    1, 1, 'Novel news', 'Noticia novela', 'Resumen',
+                    'Summary', 'en', 'https://example.com/1',
+                    'noticias', 4, '2026-08-13T10:00:00+00:00',
+                    '2026-08-13T10:00:00+00:00', 1, 0, NULL
+                );
+                """
+            )
+            conn.commit()
+            conn.close()
+
+            @contextmanager
+            def test_connection():
+                test_conn = sqlite3.connect(db_path)
+                test_conn.row_factory = sqlite3.Row
+                try:
+                    yield test_conn
+                finally:
+                    test_conn.close()
+
+            report_filter = ReportFilter(
+                days=7,
+                tags=["ficcion"],
+                tag_labels=["Ficción"],
+            )
+            since = datetime.fromisoformat("2026-08-06T00:00:00+00:00")
+
+            with patch("reports.generator.get_connection", test_connection):
+                message = _empty_tag_message(
+                    report_filter,
+                    since,
+                    date_by_publication=True,
+                )
+
+        self.assertIn("Ficción", message)
+        self.assertIn("sin tags editoriales", message)
+        self.assertNotIn("país", message.lower())
+        self.assertNotIn("run_ingest_once", message)
 
 
 if __name__ == "__main__":
