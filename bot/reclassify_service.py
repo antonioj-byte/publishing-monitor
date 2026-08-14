@@ -29,6 +29,26 @@ def reset_all_for_reclassify() -> int:
     return count
 
 
+def mark_untagged_for_reclassify() -> int:
+    with get_connection() as conn:
+        count = conn.execute(
+            """
+            SELECT COUNT(*) FROM articulos
+            WHERE procesado = 1
+              AND (tags IS NULL OR tags = '' OR tags = '[]')
+            """
+        ).fetchone()[0]
+        conn.execute(
+            """
+            UPDATE articulos SET procesado = 0
+            WHERE procesado = 1
+              AND (tags IS NULL OR tags = '' OR tags = '[]')
+            """
+        )
+        conn.commit()
+    return count
+
+
 def count_tagged_processed() -> int:
     with get_connection() as conn:
         return conn.execute(
@@ -40,6 +60,46 @@ def count_tagged_processed() -> int:
               AND tags != '[]'
             """
         ).fetchone()[0]
+
+
+def _run_classify_batches(
+    *,
+    batch_size: int,
+    delay: float,
+) -> dict[str, int]:
+    classified_total = 0
+    failed_total = 0
+    no_tags_total = 0
+    batch_num = 0
+
+    while True:
+        batch_num += 1
+        stats = classify_pending(limit=batch_size, require_tags=True)
+        classified_total += stats["classified"]
+        failed_total += stats["failed"]
+        no_tags_total += stats.get("no_tags", 0)
+
+        logger.info(
+            "Classify lote %d: +%d, fallidos %d, pendientes %d",
+            batch_num,
+            stats["classified"],
+            stats["failed"],
+            stats["remaining"],
+        )
+
+        if stats["remaining"] == 0 or stats["classified"] == 0:
+            break
+
+        if settings.anthropic_api_key and delay > 0:
+            time.sleep(delay)
+
+    return {
+        "classified": classified_total,
+        "failed": failed_total,
+        "batches": batch_num,
+        "no_tags": no_tags_total,
+        "with_tags": count_tagged_processed(),
+    }
 
 
 def run_reclassify_all(
@@ -63,45 +123,46 @@ def run_reclassify_all(
             "batches": 0,
             "with_tags": 0,
             "no_tags": 0,
+            "queued": 0,
         }
 
+    queued = total
     if reset:
         reset_all_for_reclassify()
         logger.info("Reset %d artículos para reclasificación", total)
 
-    classified_total = 0
-    failed_total = 0
-    no_tags_total = 0
-    batch_num = 0
+    stats = _run_classify_batches(batch_size=batch_size, delay=delay)
+    stats["total"] = total
+    stats["queued"] = queued
+    return stats
 
-    while True:
-        batch_num += 1
-        stats = classify_pending(limit=batch_size, require_tags=True)
-        classified_total += stats["classified"]
-        failed_total += stats["failed"]
-        no_tags_total += stats.get("no_tags", 0)
 
-        logger.info(
-            "Reclassify lote %d: +%d, fallidos %d, pendientes %d",
-            batch_num,
-            stats["classified"],
-            stats["failed"],
-            stats["remaining"],
-        )
+def run_backfill_tags(
+    *,
+    batch_size: int = 20,
+    delay: float = 0.25,
+) -> dict[str, int]:
+    """Reclassify only articles missing editorial tags."""
+    init_schema()
+    verify_anthropic_api()
 
-        if stats["remaining"] == 0 or stats["classified"] == 0:
-            break
+    with get_connection() as conn:
+        total = conn.execute("SELECT COUNT(*) FROM articulos").fetchone()[0]
 
-        if settings.anthropic_api_key and delay > 0:
-            time.sleep(delay)
+    queued = mark_untagged_for_reclassify()
+    if queued == 0:
+        return {
+            "total": total,
+            "queued": 0,
+            "classified": 0,
+            "failed": 0,
+            "batches": 0,
+            "with_tags": count_tagged_processed(),
+            "no_tags": 0,
+        }
 
-    with_tags = count_tagged_processed()
-
-    return {
-        "total": total,
-        "classified": classified_total,
-        "failed": failed_total,
-        "batches": batch_num,
-        "with_tags": with_tags,
-        "no_tags": no_tags_total,
-    }
+    logger.info("Marcados %d artículos sin tags para reclasificación", queued)
+    stats = _run_classify_batches(batch_size=batch_size, delay=delay)
+    stats["total"] = total
+    stats["queued"] = queued
+    return stats

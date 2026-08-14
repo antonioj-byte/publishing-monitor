@@ -367,8 +367,7 @@ def _empty_tag_message(
         lines.append(
             f"{missing_tags} artículo(s) clasificados sin tags editoriales "
             "(clasificación anterior a tags o modo offline). "
-            "Ejecuta `/reclasificar` o `python3 scripts/backfill_tags.py --yes` "
-            "y luego `python3 scripts/classify_pending.py`."
+            "Ejecuta `/retag` (recomendado) o `/reclasificar`."
         )
     elif pending:
         lines.append(
@@ -438,7 +437,7 @@ def _empty_country_message(
             )
             if diag["missing_tags"]:
                 lines.append(
-                    f"{diag['missing_tags']} clasificados sin tags — ejecuta `/reclasificar`."
+                    f"{diag['missing_tags']} clasificados sin tags — ejecuta `/retag`."
                 )
         elif diag["blocked_enviado"]:
             lines.append(

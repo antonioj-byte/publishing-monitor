@@ -1,3 +1,3 @@
 """Deployed bot version string (shown in /ping and logs)."""
 
-BOT_VERSION = "2026-08-14-tag-slug-fix"
+BOT_VERSION = "2026-08-14-retag-cmd"
