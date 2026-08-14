@@ -260,12 +260,25 @@ def _repetition_score(distinct_sources: int) -> float:
     return min(distinct_sources / cap, 1.0)
 
 
-def _recency_score(newest: datetime | None, now: datetime) -> float:
+def _recency_score(
+    newest: datetime | None,
+    now: datetime,
+    *,
+    window_days: int | None = None,
+) -> float:
     if newest is None:
         return settings.prioritize_recency_unknown_score
 
     age = now - newest.astimezone(ZoneInfo("UTC"))
     hours = age.total_seconds() / 3600
+
+    if window_days and window_days > 1:
+        window_hours = window_days * 24
+        if hours <= window_hours:
+            floor = settings.prioritize_recency_old_score
+            ratio = hours / window_hours
+            return 1.0 - ratio * (1.0 - floor)
+        return settings.prioritize_recency_old_score
 
     if hours <= settings.prioritize_recency_hours_full:
         return 1.0
@@ -287,7 +300,12 @@ def _tier_score(distinct_sources: int, medios: list[dict]) -> float:
     return settings.prioritize_tier2_low_rep_score
 
 
-def _score_event(articles: list[dict], now: datetime) -> ScoreBreakdown:
+def _score_event(
+    articles: list[dict],
+    now: datetime,
+    *,
+    window_days: int | None = None,
+) -> ScoreBreakdown:
     medios = _distinct_medios(articles)
     distinct_sources = len(medios)
     has_tier1 = any(m["tier"] == 1 for m in medios)
@@ -297,7 +315,7 @@ def _score_event(articles: list[dict], now: datetime) -> ScoreBreakdown:
     timestamps = [_article_timestamp(a) for a in articles]
     valid_ts = [ts for ts in timestamps if ts is not None]
     newest = max(valid_ts) if valid_ts else None
-    rec_raw = _recency_score(newest, now)
+    rec_raw = _recency_score(newest, now, window_days=window_days)
 
     tier_raw = _tier_score(distinct_sources, medios)
 
@@ -386,10 +404,16 @@ def cluster_articles(articles: list[dict]) -> list[list[dict]]:
     return [[articles[i] for i in group] for group in index_groups]
 
 
-def score_event_cluster(articles: list[dict], event_id: int, now: datetime | None = None) -> EditorialEvent:
+def score_event_cluster(
+    articles: list[dict],
+    event_id: int,
+    now: datetime | None = None,
+    *,
+    window_days: int | None = None,
+) -> EditorialEvent:
     """Score a single event cluster."""
     now = now or datetime.now(ZoneInfo(settings.timezone))
-    score = _score_event(articles, now)
+    score = _score_event(articles, now, window_days=window_days)
     return EditorialEvent(
         event_id=event_id,
         articles=_order_articles_within_event(articles),
@@ -399,12 +423,20 @@ def score_event_cluster(articles: list[dict], event_id: int, now: datetime | Non
     )
 
 
-def prioritize_articles(articles: list[dict]) -> PrioritizationResult:
+def prioritize_articles(
+    articles: list[dict],
+    *,
+    window_days: int | None = None,
+    catalog_mode: bool = False,
+) -> PrioritizationResult:
     """
     Run the full editorial prioritization pipeline:
     1. Semantic clustering into events
     2. Weighted scoring (repetition + recency + tier)
     3. Filter by configurable threshold and sort
+
+    catalog_mode: for multi-day tag/country reports — include all events
+    (threshold 0) and scale recency across the full window.
     """
     if not articles:
         return PrioritizationResult(
@@ -420,11 +452,13 @@ def prioritize_articles(articles: list[dict]) -> PrioritizationResult:
 
     events: list[EditorialEvent] = []
     for idx, cluster in enumerate(clusters):
-        events.append(score_event_cluster(cluster, event_id=idx, now=now))
+        events.append(
+            score_event_cluster(cluster, event_id=idx, now=now, window_days=window_days)
+        )
 
     events.sort(key=lambda e: (-e.score.total, -e.score.distinct_sources))
 
-    threshold = settings.prioritize_score_threshold
+    threshold = 0.0 if catalog_mode else settings.prioritize_score_threshold
     selected = [e for e in events if e.score.total >= threshold]
 
     output_articles: list[dict] = []

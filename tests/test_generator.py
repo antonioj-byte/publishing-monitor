@@ -19,6 +19,8 @@ from reports.generator import (
     _collapse_events_for_report,
     _empty_tag_message,
     _fetch_articles,
+    _is_catalog_report,
+    _order_catalog_articles,
     split_message,
 )
 
@@ -81,6 +83,39 @@ class ReportLimitTests(unittest.TestCase):
         ]
         collapsed = _collapse_events_for_report(articles)
         self.assertEqual([item["id"] for item in collapsed], [1, 3])
+
+    def test_catalog_report_detects_multi_day_tag_query(self) -> None:
+        tag_filter = ReportFilter(days=7, tags=["ficcion"], tag_labels=["Ficción"])
+        self.assertTrue(_is_catalog_report(tag_filter, "informe_pais"))
+        self.assertFalse(_is_catalog_report(tag_filter, "informe"))
+        self.assertFalse(_is_catalog_report(ReportFilter(days=1, tags=["ficcion"]), "informe_pais"))
+
+    def test_catalog_order_keeps_all_articles_not_one_per_event(self) -> None:
+        articles = [
+            {
+                "id": 1,
+                "categoria": "noticias",
+                "relevance_score": 4,
+                "medio_tier": 1,
+                "fecha_ingesta": "2026-08-10T10:00:00+00:00",
+            },
+            {
+                "id": 2,
+                "categoria": "noticias",
+                "relevance_score": 4,
+                "medio_tier": 2,
+                "fecha_ingesta": "2026-08-09T10:00:00+00:00",
+            },
+            {
+                "id": 3,
+                "categoria": "noticias",
+                "relevance_score": 3,
+                "medio_tier": 2,
+                "fecha_ingesta": "2026-08-08T10:00:00+00:00",
+            },
+        ]
+        ordered = _order_catalog_articles(articles)
+        self.assertEqual([item["id"] for item in ordered], [1, 2, 3])
 
     def test_oversized_first_article_advances_pagination_cursor(self) -> None:
         article = {

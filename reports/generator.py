@@ -562,6 +562,39 @@ def _fetch_articles(
     return articles
 
 
+def _is_catalog_report(report_filter: ReportFilter | None, mode: str) -> bool:
+    """Multi-day tag/country reports browse a catalog; not breaking-news digests."""
+    if mode != "informe_pais" or not report_filter:
+        return False
+    days = report_filter.days or 0
+    if days <= 1:
+        return False
+    return bool(report_filter.tags or report_filter.pais or report_filter.region)
+
+
+def _order_catalog_articles(articles: list[dict]) -> list[dict]:
+    """Order catalog reports by score tier and recency — no event collapse."""
+    ordered: list[dict] = []
+    seen_ids: set[int] = set()
+    for categoria in ("ideas", "noticias"):
+        cat_items = [a for a in articles if a.get("categoria") == categoria]
+        for score, _, _ in _relevance_tiers():
+            tier_items = sorted(
+                [a for a in cat_items if (a.get("relevance_score") or 3) == score],
+                key=_article_priority_key,
+            )
+            for article in tier_items:
+                if article["id"] not in seen_ids:
+                    seen_ids.add(article["id"])
+                    ordered.append(article)
+    extras = sorted(
+        [a for a in articles if a["id"] not in seen_ids],
+        key=_article_priority_key,
+    )
+    ordered.extend(extras)
+    return ordered
+
+
 def _order_articles(articles: list[dict]) -> list[dict]:
     """Order by event score, then category and relevance."""
     ordered: list[dict] = []
@@ -953,8 +986,14 @@ def build_report(
             )
 
         batch, _ = limit_batch_for_prioritization(articles)
-        prioritization = prioritize_articles(batch)
-        if not prioritization.articles:
+        catalog = _is_catalog_report(report_filter, mode)
+        window_days = report_filter.days if report_filter and report_filter.days else None
+        prioritization = prioritize_articles(
+            batch,
+            window_days=window_days if catalog else None,
+            catalog_mode=catalog,
+        )
+        if not prioritization.articles and not catalog:
             now = _tz_now()
             lines = _header_lines(mode, report_filter, now)
             lines.append("")
@@ -970,8 +1009,11 @@ def build_report(
             )
 
         trends = events_to_trends(prioritization.events)
-        collapsed = _collapse_events_for_report(prioritization.articles)
-        ordered = _apply_report_limits(_order_articles(collapsed))
+        if catalog:
+            ordered = _apply_report_limits(_order_catalog_articles(batch))
+        else:
+            collapsed = _collapse_events_for_report(prioritization.articles)
+            ordered = _apply_report_limits(_order_articles(collapsed))
         total_matched = len(ordered)
         all_ids = [a["id"] for a in ordered]
         start_cursor = 0

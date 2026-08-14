@@ -19,6 +19,7 @@ from reports.prioritize import (
     _repetition_score,
     _tier_score,
     limit_batch_for_prioritization,
+    prioritize_articles,
     score_event_cluster,
 )
 
@@ -38,6 +39,14 @@ class PrioritizeScoringTests(unittest.TestCase):
         now = datetime(2026, 8, 13, 12, 0, tzinfo=ZoneInfo("Europe/Madrid"))
         old = now - timedelta(days=5)
         self.assertLess(_recency_score(old, now), 0.2)
+
+    def test_recency_scales_with_report_window(self) -> None:
+        now = datetime(2026, 8, 13, 12, 0, tzinfo=ZoneInfo("Europe/Madrid"))
+        five_days_old = now - timedelta(days=5)
+        daily = _recency_score(five_days_old, now)
+        weekly = _recency_score(five_days_old, now, window_days=7)
+        self.assertLess(daily, 0.2)
+        self.assertGreater(weekly, daily)
 
     def test_tier1_beats_tier2_repetition(self) -> None:
         medios_t1 = [{"nombre": "The Guardian Books", "tier": 1}]
@@ -160,6 +169,37 @@ class PrioritizeScoringTests(unittest.TestCase):
             batch, total = limit_batch_for_prioritization(articles)
         self.assertEqual(total, 2)
         self.assertEqual(batch[0]["id"], 1)
+
+    def test_catalog_mode_includes_singleton_events(self) -> None:
+        now = datetime(2026, 8, 13, 12, 0, tzinfo=ZoneInfo("Europe/Madrid"))
+        articles = [
+            {
+                "id": 1,
+                "titulo_original": "Arthur C Clarke award winner announced",
+                "titular_traducido": "Premio Arthur C Clarke",
+                "resumen_generado": "Una novela climática gana el premio.",
+                "medio_nombre": "The Bookseller",
+                "medio_tier": 1,
+                "relevance_score": 4,
+                "categoria": "noticias",
+                "fecha_publicacion": (now - timedelta(days=5)).isoformat(),
+            },
+            {
+                "id": 2,
+                "titulo_original": "Rebecca Perry Lorca interview poetry",
+                "titular_traducido": "Rebecca Perry sobre Lorca",
+                "resumen_generado": "Entrevista sobre poesía y Lorca.",
+                "medio_nombre": "The Guardian Books",
+                "medio_tier": 1,
+                "relevance_score": 4,
+                "categoria": "noticias",
+                "fecha_publicacion": (now - timedelta(days=6)).isoformat(),
+            },
+        ]
+        daily = prioritize_articles(articles)
+        catalog = prioritize_articles(articles, window_days=7, catalog_mode=True)
+        self.assertLess(daily.events_above_threshold, len(articles))
+        self.assertEqual(catalog.events_above_threshold, len(articles))
 
 
 if __name__ == "__main__":
