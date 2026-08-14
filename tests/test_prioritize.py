@@ -197,7 +197,7 @@ class PrioritizeScoringTests(unittest.TestCase):
             },
         ]
         daily = prioritize_articles(articles)
-        catalog = prioritize_articles(articles, window_days=7, catalog_mode=True)
+        catalog = prioritize_articles(articles, recency_window_days=7)
         self.assertLess(daily.events_above_threshold, len(articles))
         self.assertEqual(catalog.events_above_threshold, len(articles))
 
