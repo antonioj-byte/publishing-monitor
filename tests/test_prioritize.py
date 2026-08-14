@@ -4,16 +4,21 @@ from __future__ import annotations
 
 import sys
 import unittest
+from dataclasses import replace
 from datetime import datetime, timedelta
 from pathlib import Path
 from zoneinfo import ZoneInfo
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
+from bot.config import settings
 from reports.prioritize import (
+    _order_articles_within_event,
+    _pick_representative_title,
     _recency_score,
     _repetition_score,
     _tier_score,
+    limit_batch_for_prioritization,
     score_event_cluster,
 )
 
@@ -107,6 +112,54 @@ class PrioritizeScoringTests(unittest.TestCase):
         self.assertIn("Tier 1", event.score.explanation)
         self.assertGreater(event.score.total, 0.5)
         self.assertEqual(event.score.distinct_sources, 2)
+
+    def test_article_order_prefers_relevance_then_tier1(self) -> None:
+        articles = [
+            {
+                "id": 1,
+                "titulo_original": "Tier 2",
+                "medio_tier": 2,
+                "relevance_score": 4,
+            },
+            {
+                "id": 2,
+                "titulo_original": "Tier 1",
+                "medio_tier": 1,
+                "relevance_score": 4,
+            },
+            {
+                "id": 3,
+                "titulo_original": "Destacado",
+                "medio_tier": 2,
+                "relevance_score": 5,
+            },
+        ]
+        ordered = _order_articles_within_event(articles)
+        self.assertEqual([article["id"] for article in ordered], [3, 2, 1])
+        self.assertEqual(_pick_representative_title(articles), "Destacado")
+
+    def test_capped_batch_prefers_tier1_for_equal_scores(self) -> None:
+        from unittest.mock import patch
+
+        articles = [
+            {
+                "id": 1,
+                "medio_tier": 2,
+                "relevance_score": 4,
+                "fecha_ingesta": "2026-08-13T10:00:00+00:00",
+            },
+            {
+                "id": 2,
+                "medio_tier": 1,
+                "relevance_score": 4,
+                "fecha_ingesta": "2026-08-13T10:00:00+00:00",
+            },
+        ]
+        limited_settings = replace(settings, prioritize_max_batch=1)
+        with patch("reports.prioritize.settings", limited_settings):
+            batch, total = limit_batch_for_prioritization(articles)
+        self.assertEqual(total, 2)
+        self.assertEqual(batch[0]["id"], 2)
 
 
 if __name__ == "__main__":

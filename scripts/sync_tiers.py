@@ -10,13 +10,10 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from db.connection import get_connection, init_schema
 from medios_tiers import TIER1_ALL, get_tier, tier_label
-from scripts.load_medios import load_medios
 
 
 def main() -> None:
     init_schema()
-    load_stats = load_medios()
-    print(f"medios.csv loaded: {load_stats}")
 
     changes: list[tuple[str, int, int]] = []
     with get_connection() as conn:

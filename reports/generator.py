@@ -85,11 +85,98 @@ def _resolve_window(
     return since, False, mode
 
 
+def _count_country_candidates(
+    report_filter: ReportFilter,
+    since: datetime,
+    *,
+    date_by_publication: bool,
+) -> tuple[int, int, int]:
+    """Return (classified relevant in window, pending, total for country/region)."""
+    since_iso = since.astimezone(ZoneInfo("UTC")).isoformat()
+    date_col = (
+        "COALESCE(NULLIF(a.fecha_publicacion, ''), a.fecha_ingesta)"
+        if date_by_publication
+        else "a.fecha_ingesta"
+    )
+    geo = "m.pais = ?" if report_filter.pais else "m.region = ?"
+    geo_val = report_filter.pais or report_filter.region
+
+    with get_connection() as conn:
+        in_window = conn.execute(
+            f"""
+            SELECT COUNT(*) FROM articulos a
+            JOIN medios m ON m.id = a.medio_id
+            WHERE {geo} AND a.procesado = 1 AND a.relevance_score >= ?
+              AND {date_col} >= ?
+            """,
+            (geo_val, settings.min_relevance_score, since_iso),
+        ).fetchone()[0]
+        pending = conn.execute(
+            f"""
+            SELECT COUNT(*) FROM articulos a
+            JOIN medios m ON m.id = a.medio_id
+            WHERE {geo} AND a.procesado = 0 AND {date_col} >= ?
+            """,
+            (geo_val, since_iso),
+        ).fetchone()[0]
+        total_geo = conn.execute(
+            f"""
+            SELECT COUNT(*) FROM articulos a
+            JOIN medios m ON m.id = a.medio_id
+            WHERE {geo}
+            """,
+            (geo_val,),
+        ).fetchone()[0]
+    return in_window, pending, total_geo
+
+
+def _empty_country_message(
+    report_filter: ReportFilter,
+    since: datetime,
+    *,
+    date_by_publication: bool,
+) -> str:
+    in_window, pending, total_geo = _count_country_candidates(
+        report_filter, since, date_by_publication=date_by_publication
+    )
+    label = report_filter.location_label or "la zona"
+    lines = [
+        f"_No hay artículos editoriales de {label} "
+        f"en los últimos {report_filter.days} días._",
+        "",
+        f"En base de datos: {total_geo} artículos de {label}, "
+        f"{in_window} clasificados en ventana, {pending} pendientes de clasificar.",
+    ]
+    if pending:
+        lines.append(
+            "Espera a que termine la clasificación o ejecuta: "
+            "`python3 scripts/classify_pending.py`"
+        )
+    elif total_geo == 0:
+        lines.append(
+            "No hay artículos ingeridos de ese país. Ejecuta: "
+            "`python3 scripts/run_ingest_once.py`"
+        )
+    elif in_window:
+        lines.append(
+            "Hay artículos clasificados en la ventana, pero todos fueron "
+            "descartados por el filtro editorial."
+        )
+    else:
+        lines.append(
+            f"Prueba un periodo más amplio: `/informe 7 {label.lower()}` "
+            "o revisa el filtro editorial con `python3 scripts/diagnose_pipeline.py`."
+        )
+    return "\n".join(lines)
+
+
 def _fetch_articles(
     since: datetime,
     include_sent: bool = False,
     report_filter: ReportFilter | None = None,
     article_ids: list[int] | None = None,
+    *,
+    date_by_publication: bool = False,
 ) -> list[dict]:
     min_score = settings.min_relevance_score
     query = """
@@ -109,8 +196,15 @@ def _fetch_articles(
         query += f" AND a.id IN ({placeholders})"
         params.extend(article_ids)
     else:
-        query += " AND a.fecha_ingesta >= ?"
-        params.append(since.astimezone(ZoneInfo("UTC")).isoformat())
+        since_iso = since.astimezone(ZoneInfo("UTC")).isoformat()
+        if date_by_publication:
+            query += (
+                " AND COALESCE(NULLIF(a.fecha_publicacion, ''), "
+                "a.fecha_ingesta) >= ?"
+            )
+        else:
+            query += " AND a.fecha_ingesta >= ?"
+        params.append(since_iso)
 
     if report_filter:
         if report_filter.pais:
@@ -120,7 +214,9 @@ def _fetch_articles(
             query += " AND m.region = ?"
             params.append(report_filter.region)
 
-    if not include_sent:
+    # A continuation uses a persisted snapshot of IDs. Keep already-shown IDs
+    # in that snapshot so its cursor still addresses the same ordered list.
+    if not include_sent and not article_ids:
         query += " AND a.enviado = 0"
 
     query += " ORDER BY a.relevance_score DESC, a.categoria, a.fecha_ingesta DESC"
@@ -176,6 +272,26 @@ def _order_articles(articles: list[dict]) -> list[dict]:
     return ordered
 
 
+def _apply_report_limits(articles: list[dict]) -> list[dict]:
+    """Apply configured score and total limits while preserving priority order."""
+    per_score_limits = {score: limit for score, _, limit in _relevance_tiers()}
+    counts = {score: 0 for score in per_score_limits}
+    limited: list[dict] = []
+    total_limit = max(0, settings.max_articles_per_informe)
+
+    for article in articles:
+        score = int(article.get("relevance_score") or 3)
+        score_limit = max(0, per_score_limits.get(score, 0))
+        if counts.get(score, 0) >= score_limit:
+            continue
+        if total_limit and len(limited) >= total_limit:
+            break
+        limited.append(article)
+        counts[score] = counts.get(score, 0) + 1
+
+    return limited
+
+
 def _format_entry(item: dict, *, show_tier: bool = False) -> str:
     untranslated = is_likely_untranslated(
         idioma=item.get("idioma", "es"),
@@ -226,9 +342,6 @@ def _format_trends_section(trends: list[dict], max_trends: int = 5) -> list[str]
         if trend.get("event_explanation"):
             lines.append(f"  _({trend['event_explanation']})_")
         lines.append("")
-        for item in trend["articles"][:2]:
-            lines.append(_format_entry(item))
-            lines.append("")
     return lines
 
 
@@ -321,6 +434,21 @@ def _build_pages(
         prospective = word_count + _word_count("\n".join(blocks_to_add))
         if article_ids and prospective > word_budget:
             break
+        if not article_ids and prospective > word_budget:
+            # Always advance the cursor. A single oversized entry is preferable
+            # to an endless /informe_mas loop at the same position.
+            lines.extend(blocks_to_add)
+            word_count = prospective
+            article_ids.append(item["id"])
+            if is_likely_untranslated(
+                idioma=item.get("idioma", "es"),
+                titulo_original=item.get("titulo_original", ""),
+                titular_traducido=item.get("titular_traducido"),
+                resumen_generado=item.get("resumen_generado"),
+                resumen_raw=item.get("resumen_raw"),
+            ):
+                untranslated_count += 1
+            continue
 
         for block in blocks_to_add:
             added, word_count = _append_within_word_limit(
@@ -385,8 +513,12 @@ def build_report(
     else:
         since, include_sent, resolved_mode = _resolve_window(mode, report_filter)
         mode = resolved_mode
+        use_pub_date = mode in ("informe_pais", "informe_hoy")
         articles = _fetch_articles(
-            since, include_sent=include_sent, report_filter=report_filter
+            since,
+            include_sent=include_sent,
+            report_filter=report_filter,
+            date_by_publication=use_pub_date,
         )
         if not articles:
             now = _tz_now()
@@ -394,8 +526,11 @@ def build_report(
             lines.append("")
             if mode == "informe_pais" and report_filter:
                 lines.append(
-                    f"_No hay artículos de {report_filter.location_label} "
-                    f"en los últimos {report_filter.days} días._"
+                    _empty_country_message(
+                        report_filter,
+                        since,
+                        date_by_publication=use_pub_date,
+                    )
                 )
             else:
                 lines.append("_No hay artículos que cumplan los criterios en este periodo._")
@@ -406,9 +541,8 @@ def build_report(
                 total_matched=0,
             )
 
-        batch, total_fetched = limit_batch_for_prioritization(articles)
+        batch, _ = limit_batch_for_prioritization(articles)
         prioritization = prioritize_articles(batch)
-        total_matched = total_fetched
         if not prioritization.articles:
             now = _tz_now()
             lines = _header_lines(mode, report_filter, now)
@@ -421,11 +555,12 @@ def build_report(
                 text="\n".join(lines),
                 article_ids=[],
                 mode=mode,
-                total_matched=total_matched,
+                total_matched=0,
             )
 
         trends = events_to_trends(prioritization.events)
-        ordered = _order_articles(prioritization.articles)
+        ordered = _apply_report_limits(_order_articles(prioritization.articles))
+        total_matched = len(ordered)
         all_ids = [a["id"] for a in ordered]
         start_cursor = 0
         include_trends = True
@@ -481,6 +616,17 @@ def split_message(text: str, max_len: int = 4000) -> list[str]:
     current_len = 0
 
     for block in text.split("\n\n"):
+        if len(block) > max_len:
+            if current:
+                chunks.append("\n\n".join(current))
+                current = []
+                current_len = 0
+            chunks.extend(
+                block[start : start + max_len]
+                for start in range(0, len(block), max_len)
+            )
+            continue
+
         block_len = len(block) + 2
         if current_len + block_len > max_len and current:
             chunks.append("\n\n".join(current))

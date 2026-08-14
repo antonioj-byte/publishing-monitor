@@ -107,7 +107,8 @@ def _is_valid_title(title: str) -> bool:
         return False
     junk = (
         "newsletter", "subscribe", "sign up", "log in", "cookie",
-        "free newsletters", "follow us",
+        "free newsletters", "follow us", "download", "télécharger",
+        "telecharger", "se connecter", "sign in", "image pour",
     )
     lower = title.lower()
     return not any(j in lower for j in junk)
@@ -128,6 +129,7 @@ def scrape_section(url: str, max_articles: int = 25) -> list[ParsedArticle]:
 
     soup = BeautifulSoup(html, "lxml")
     seen_urls: set[str] = set()
+    seen_titles: set[str] = set()
     articles: list[ParsedArticle] = []
 
     containers = soup.select(selectors["article"]) or [soup.body or soup]
@@ -149,8 +151,12 @@ def scrape_section(url: str, max_articles: int = 25) -> list[ParsedArticle]:
                 title = strip_html(link_el.get_text())
             if not title or not _is_valid_title(title):
                 continue
+            title_key = re.sub(r"\s+", " ", title).strip().casefold()
+            if title_key in seen_titles:
+                continue
 
             seen_urls.add(article_url)
+            seen_titles.add(title_key)
             articles.append(
                 ParsedArticle(
                     title=title,

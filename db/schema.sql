@@ -32,9 +32,11 @@ CREATE TABLE IF NOT EXISTS articulos (
 );
 
 CREATE INDEX IF NOT EXISTS idx_articulos_fecha_ingesta ON articulos (fecha_ingesta DESC);
+CREATE INDEX IF NOT EXISTS idx_articulos_fecha_publicacion ON articulos (fecha_publicacion DESC);
 CREATE INDEX IF NOT EXISTS idx_articulos_procesado ON articulos (procesado) WHERE procesado = 0;
 CREATE INDEX IF NOT EXISTS idx_articulos_categoria ON articulos (categoria);
 CREATE INDEX IF NOT EXISTS idx_articulos_enviado ON articulos (enviado);
+CREATE INDEX IF NOT EXISTS idx_medios_pais ON medios (pais);
 
 CREATE TABLE IF NOT EXISTS informes (
     id INTEGER PRIMARY KEY AUTOINCREMENT,

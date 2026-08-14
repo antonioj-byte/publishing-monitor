@@ -10,7 +10,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from bot.report_parser import parse_command_args
 from db.connection import init_schema
 from db.models import ReportFilter
-from reports.generator import build_report
+from reports.pipeline import build_editorial_report
 
 
 def main() -> None:
@@ -31,13 +31,13 @@ def main() -> None:
             region=parsed.region,
             location_label=parsed.location_label,
         )
-        report = build_report(mode="informe_pais", report_filter=report_filter)
+        report = build_editorial_report(mode="informe_pais", report_filter=report_filter)
         print(f"\n{'='*60}\nFILTER: {parsed.location_label}, {parsed.days} días\n{'='*60}\n")
         print(report.text)
         return
 
     for mode in ("informe", "informe_hoy"):
-        report = build_report(mode=mode)
+        report = build_editorial_report(mode=mode)
         print(f"\n{'='*60}\nMODE: {mode}\n{'='*60}\n")
         print(report.text)
 

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import sqlite3
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 
@@ -33,13 +34,24 @@ def _row_to_medio(row) -> Medio:
         idioma=row["idioma"],
         region=row["region"],
         pais=row["pais"],
+        tier=int(row["tier"]),
         activo=bool(row["activo"]),
     )
 
 
 def fetch_articles(medio: Medio) -> list[ParsedArticle]:
     if medio.metodo == "rss" and medio.url_rss:
-        return parse_feed(medio.url_rss)
+        try:
+            articles = parse_feed(medio.url_rss)
+            if articles:
+                return articles
+            logger.warning("%s: RSS returned no articles; trying scraper", medio.nombre)
+        except Exception:
+            logger.warning(
+                "%s: RSS failed; trying scraper fallback",
+                medio.nombre,
+                exc_info=True,
+            )
     scrape_url = medio.url_scraping or medio.url_site
     return scrape_section(scrape_url)
 
@@ -70,8 +82,29 @@ def save_article(medio: Medio, article: ParsedArticle, stats: IngestStats) -> No
             )
             conn.commit()
             stats.inserted += 1
-        except Exception as exc:
+        except sqlite3.IntegrityError as exc:
             if "UNIQUE constraint failed" in str(exc):
+                # Feeds often enrich an existing item after first publication.
+                # Preserve classification state while filling fresher raw data.
+                conn.execute(
+                    """
+                    UPDATE articulos SET
+                        titulo_original = ?,
+                        resumen_raw = COALESCE(?, resumen_raw),
+                        fecha_publicacion = COALESCE(
+                            NULLIF(?, ''),
+                            fecha_publicacion
+                        )
+                    WHERE url = ?
+                    """,
+                    (
+                        article.title,
+                        article.summary,
+                        article.published_at,
+                        article.url,
+                    ),
+                )
+                conn.commit()
                 stats.skipped += 1
             else:
                 raise

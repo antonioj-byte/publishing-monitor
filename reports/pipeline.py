@@ -3,9 +3,10 @@
 from __future__ import annotations
 
 import logging
+from zoneinfo import ZoneInfo
 
 from ai.classify import classify_all_pending
-from reports.generator import ReportResult, build_report
+from reports.generator import ReportResult, _resolve_window, build_report
 from db.models import ReportFilter
 from reports.session import ReportSession
 
@@ -29,7 +30,12 @@ def build_editorial_report(
     Skips classification only for /informe_mas continuations.
     """
     if classify_before_report and continuation is None:
-        stats = classify_all_pending()
+        since, _, resolved_mode = _resolve_window(mode, report_filter)
+        stats = classify_all_pending(
+            report_filter=report_filter,
+            since_iso=since.astimezone(ZoneInfo("UTC")).isoformat(),
+            date_by_publication=resolved_mode in ("informe_pais", "informe_hoy"),
+        )
         logger.info(
             "Pipeline classify: %d classified, %d failed, %d remaining",
             stats["classified"],

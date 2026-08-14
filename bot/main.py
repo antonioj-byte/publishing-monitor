@@ -23,8 +23,9 @@ from bot.telegram_handlers import (
 )
 from db.connection import init_schema
 from ingest.runner import ingest_all
-from reports.generator import record_informe, split_message
+from reports.generator import mark_articles_sent, record_informe, split_message
 from reports.pipeline import build_editorial_report
+from reports.session import load_session
 
 logging.basicConfig(
     level=logging.INFO,
@@ -55,27 +56,53 @@ async def job_informe_automatico(app: Application) -> None:
     logger.info("Starting automatic report")
     await job_cierre()
 
-    report = await asyncio.to_thread(
-        build_editorial_report,
-        "informe",
-        classify_before_report=False,
-    )
     chat_id = settings.telegram_chat_id
     if not chat_id:
         logger.error("TELEGRAM_CHAT_ID not set")
         return
 
-    for chunk in split_message(report.text):
-        await app.bot.send_message(
+    report = await asyncio.to_thread(
+        build_editorial_report,
+        "informe",
+        chat_id=chat_id,
+        classify_before_report=False,
+    )
+    session = load_session(chat_id)
+    sent_count = 0
+
+    while True:
+        for chunk in split_message(report.text):
+            await app.bot.send_message(
+                chat_id=chat_id,
+                text=chunk,
+                disable_web_page_preview=True,
+            )
+
+        if report.article_ids:
+            await asyncio.to_thread(mark_articles_sent, report.article_ids)
+            sent_count += len(report.article_ids)
+
+        if not report.has_more:
+            complete_ids = session.article_ids if session else report.article_ids
+            if complete_ids:
+                await asyncio.to_thread(
+                    record_informe,
+                    complete_ids,
+                    "automatico",
+                )
+            break
+
+        session = load_session(chat_id)
+        if not session:
+            logger.error("Automatic report continuation session missing")
+            break
+        report = await asyncio.to_thread(
+            build_editorial_report,
+            continuation=session,
             chat_id=chat_id,
-            text=chunk,
-            disable_web_page_preview=True,
         )
 
-    if report.article_ids:
-        await asyncio.to_thread(record_informe, report.article_ids, "automatico")
-
-    logger.info("Automatic report sent (%d articles)", len(report.article_ids))
+    logger.info("Automatic report sent (%d articles)", sent_count)
 
 
 def setup_scheduler(app: Application) -> AsyncIOScheduler:
