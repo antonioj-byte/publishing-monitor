@@ -13,8 +13,10 @@ from ai.translation import is_likely_untranslated
 from bot.config import settings
 from db.connection import get_connection
 from db.models import Categoria, ReportFilter
-from medios_tiers import get_tier, tier_label
+from medios_tiers import get_tier
+from reports.dates import publication_since_iso, publication_within_window
 from reports.session import ReportSession, save_session
+from reports.telegram_format import esc, format_article_entry
 from reports.prioritize import (
     _article_priority_key,
     events_to_trends,
@@ -29,8 +31,8 @@ CATEGORY_HEADERS: dict[Categoria, str] = {
 
 MORE_FOOTER = (
     "\n\n---\n"
-    "_Quedan {remaining} artículos más "
-    f"(límite: {settings.max_report_words:,} palabras por envío)._\n"
+    "<i>Quedan {remaining} artículos más "
+    f"(límite: {settings.max_report_words:,} palabras por envío).</i>\n"
     "Usa /informe_mas para continuar."
 )
 
@@ -95,14 +97,19 @@ def _count_country_candidates(
     since: datetime,
     *,
     date_by_publication: bool,
+    strict_publication: bool = False,
 ) -> tuple[int, int, int]:
     """Return (classified relevant in window, pending, total for country/region)."""
-    since_iso = since.astimezone(ZoneInfo("UTC")).isoformat()
-    date_col = (
-        "COALESCE(NULLIF(a.fecha_publicacion, ''), a.fecha_ingesta)"
-        if date_by_publication
-        else "a.fecha_ingesta"
-    )
+    since_iso = publication_since_iso(since)
+    if date_by_publication and strict_publication:
+        date_expr = "a.fecha_publicacion"
+        pub_filter = "AND a.fecha_publicacion IS NOT NULL AND a.fecha_publicacion != ''"
+    elif date_by_publication:
+        date_expr = "COALESCE(NULLIF(a.fecha_publicacion, ''), a.fecha_ingesta)"
+        pub_filter = ""
+    else:
+        date_expr = "a.fecha_ingesta"
+        pub_filter = ""
     geo = "m.pais = ?" if report_filter.pais else "m.region = ?"
     geo_val = report_filter.pais or report_filter.region
 
@@ -112,7 +119,8 @@ def _count_country_candidates(
             SELECT COUNT(*) FROM articulos a
             JOIN medios m ON m.id = a.medio_id
             WHERE {geo} AND a.procesado = 1 AND a.relevance_score >= ?
-              AND {date_col} >= ?
+              {pub_filter}
+              AND {date_expr} >= ?
             """,
             (geo_val, settings.min_relevance_score, since_iso),
         ).fetchone()[0]
@@ -120,7 +128,9 @@ def _count_country_candidates(
             f"""
             SELECT COUNT(*) FROM articulos a
             JOIN medios m ON m.id = a.medio_id
-            WHERE {geo} AND a.procesado = 0 AND {date_col} >= ?
+            WHERE {geo} AND a.procesado = 0
+              {pub_filter}
+              AND {date_expr} >= ?
             """,
             (geo_val, since_iso),
         ).fetchone()[0]
@@ -140,14 +150,18 @@ def _empty_country_message(
     since: datetime,
     *,
     date_by_publication: bool,
+    strict_publication: bool = False,
 ) -> str:
     in_window, pending, total_geo = _count_country_candidates(
-        report_filter, since, date_by_publication=date_by_publication
+        report_filter,
+        since,
+        date_by_publication=date_by_publication,
+        strict_publication=strict_publication,
     )
     label = report_filter.location_label or "la zona"
     lines = [
-        f"_No hay artículos editoriales de {label} "
-        f"en los últimos {report_filter.days} días._",
+        f"<i>No hay artículos editoriales de {esc(label)} "
+        f"en los últimos {report_filter.days} días.</i>",
         "",
         f"En base de datos: {total_geo} artículos de {label}, "
         f"{in_window} clasificados en ventana, {pending} pendientes de clasificar.",
@@ -182,6 +196,7 @@ def _fetch_articles(
     article_ids: list[int] | None = None,
     *,
     date_by_publication: bool = False,
+    strict_publication: bool = False,
 ) -> list[dict]:
     min_score = settings.min_relevance_score
     query = """
@@ -201,8 +216,14 @@ def _fetch_articles(
         query += f" AND a.id IN ({placeholders})"
         params.extend(article_ids)
     else:
-        since_iso = since.astimezone(ZoneInfo("UTC")).isoformat()
-        if date_by_publication:
+        since_iso = publication_since_iso(since)
+        if date_by_publication and strict_publication:
+            query += (
+                " AND a.fecha_publicacion IS NOT NULL"
+                " AND a.fecha_publicacion != ''"
+                " AND a.fecha_publicacion >= ?"
+            )
+        elif date_by_publication:
             query += (
                 " AND COALESCE(NULLIF(a.fecha_publicacion, ''), "
                 "a.fecha_ingesta) >= ?"
@@ -236,6 +257,13 @@ def _fetch_articles(
         )
 
     articles = filter_editorial_scope(articles)
+
+    if date_by_publication and strict_publication and not article_ids:
+        articles = [
+            a
+            for a in articles
+            if publication_within_window(a.get("fecha_publicacion"), since)
+        ]
 
     if article_ids:
         order = {aid: idx for idx, aid in enumerate(article_ids)}
@@ -367,29 +395,8 @@ def _apply_report_limits(articles: list[dict]) -> list[dict]:
     return limited
 
 
-def _format_entry(item: dict, *, show_tier: bool = False) -> str:
-    untranslated = is_likely_untranslated(
-        idioma=item.get("idioma", "es"),
-        titulo_original=item.get("titulo_original", ""),
-        titular_traducido=item.get("titular_traducido"),
-        resumen_generado=item.get("resumen_generado"),
-        resumen_raw=item.get("resumen_raw"),
-    )
-    titular = item["titular_traducido"] or item["titulo_original"]
-    if untranslated:
-        resumen = (
-            "_(Traducción al castellano pendiente — "
-            "ejecuta `python3 scripts/reclassify_untranslated.py`)_"
-        )
-    else:
-        resumen = item["resumen_generado"] or "(sin resumen)"
-    medio = item.get("medio_nombre", "")
-    tier_suffix = ""
-    if show_tier:
-        tier_num = item.get("medio_tier") or 2
-        tier_suffix = f" · {tier_label(tier_num)}"
-    source = f" — _{medio}{tier_suffix}_" if medio else ""
-    return f"📰 {titular}{source}\n{resumen}\n🔗 {item['url']}"
+def _format_entry(item: dict) -> str:
+    return format_article_entry(item)
 
 
 def _format_trends_section(trends: list[dict], max_trends: int = 5) -> list[str]:
@@ -405,17 +412,16 @@ def _format_trends_section(trends: list[dict], max_trends: int = 5) -> list[str]
             if not name or name in seen:
                 continue
             seen.add(name)
-            tier_num = item.get("medio_tier") or 2
-            medios_parts.append(f"{name} (T{tier_num})")
+            medios_parts.append(name)
         medios_parts.sort()
-        medios = ", ".join(medios_parts)
-        label = trend["topic_label"].replace("|", " · ")
+        medios = esc(", ".join(medios_parts))
+        label = esc(trend["topic_label"].replace("|", " · "))
         score_note = ""
         if trend.get("event_score") is not None:
             score_note = f" · puntuación {trend['event_score']:.2f}"
-        lines.append(f"• _{label}_{score_note} — {len(trend['medios'])} medios: {medios}")
+        lines.append(f"• <i>{label}{score_note}</i> — {len(trend['medios'])} medios: {medios}")
         if trend.get("event_explanation"):
-            lines.append(f"  _({trend['event_explanation']})_")
+            lines.append(f"  <i>({esc(trend['event_explanation'])})</i>")
         lines.append("")
     return lines
 
@@ -428,14 +434,17 @@ def _header_lines(mode: str, report_filter: ReportFilter | None, now: datetime) 
             f"(últimos {report_filter.days} días) — {date_str}"
         ]
     elif mode == "informe_hoy":
-        lines = [f"📋 Informe de hoy — {date_str}"]
+        lines = [
+            f"📋 Informe de hoy — {date_str}",
+            "<i>Solo artículos publicados en web hoy (fecha de publicación).</i>",
+        ]
     elif mode == "informe_mas":
         lines = [f"📋 Informe (continuación) — {date_str}"]
     else:
-        lines = [f"📋 Informe editorial — {date_str}"]
-    lines.append(
-        "_Tier 1/2 = autoridad del medio · Destacado/Relevante = prioridad del artículo_"
-    )
+        lines = [
+            f"📋 Informe editorial — {date_str}",
+            "<i>Artículos publicados desde el último cierre.</i>",
+        ]
     return lines
 
 
@@ -504,7 +513,7 @@ def _build_pages(
                 blocks_to_add.extend([tier_title, ""])
                 current_tier = score
 
-        blocks_to_add.extend([_format_entry(item, show_tier=True), ""])
+        blocks_to_add.extend([_format_entry(item), ""])
 
         prospective = word_count + _word_count("\n".join(blocks_to_add))
         if article_ids and prospective > word_budget:
@@ -554,11 +563,12 @@ def _build_pages(
 
     if untranslated_count:
         lines.append(
-            f"\n\n_⚠️ {untranslated_count} artículo(s) sin traducir al castellano. "
-            "Ejecuta `python3 scripts/reclassify_untranslated.py --yes`._"
+            f"\n\n<i>⚠️ {untranslated_count} artículo(s) sin traducir al castellano. "
+            "Ejecuta python3 scripts/reclassify_untranslated.py --yes</i>"
         )
 
-    return "\n".join(lines), article_ids, new_cursor, has_more, untranslated_count
+    body = "\n".join(lines)
+    return body, article_ids, new_cursor, has_more, untranslated_count
 
 
 def build_report(
@@ -588,12 +598,14 @@ def build_report(
     else:
         since, include_sent, resolved_mode = _resolve_window(mode, report_filter)
         mode = resolved_mode
-        use_pub_date = mode in ("informe_pais", "informe_hoy")
+        use_pub_date = mode in ("informe_pais", "informe_hoy", "informe")
+        strict_publication = mode in ("informe_hoy", "informe")
         articles = _fetch_articles(
             since,
             include_sent=include_sent,
             report_filter=report_filter,
             date_by_publication=use_pub_date,
+            strict_publication=strict_publication,
         )
         if not articles:
             now = _tz_now()
@@ -605,10 +617,18 @@ def build_report(
                         report_filter,
                         since,
                         date_by_publication=use_pub_date,
+                        strict_publication=strict_publication,
                     )
                 )
             else:
-                lines.append("_No hay artículos que cumplan los criterios en este periodo._")
+                if mode == "informe_hoy":
+                    lines.append(
+                        "<i>No hay artículos publicados hoy que cumplan los criterios.</i>"
+                    )
+                else:
+                    lines.append(
+                        "<i>No hay artículos que cumplan los criterios en este periodo.</i>"
+                    )
             return ReportResult(
                 text="\n".join(lines),
                 article_ids=[],
@@ -623,8 +643,8 @@ def build_report(
             lines = _header_lines(mode, report_filter, now)
             lines.append("")
             lines.append(
-                "_No hay eventos editoriales que superen el umbral de priorización "
-                f"({settings.prioritize_score_threshold:.2f}) en este periodo._"
+                "<i>No hay eventos editoriales que superen el umbral de priorización "
+                f"({settings.prioritize_score_threshold:.2f}) en este periodo.</i>"
             )
             return ReportResult(
                 text="\n".join(lines),

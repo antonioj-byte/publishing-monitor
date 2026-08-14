@@ -8,6 +8,7 @@ import re
 from functools import partial
 
 from telegram import Update
+from telegram.constants import ParseMode
 from telegram.ext import ContextTypes
 
 from bot.auth import is_authorized, unauthorized_message
@@ -40,7 +41,7 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
         "Comandos:\n"
         "/ping — comprobar latencia\n"
         "/informe — informe desde el último cierre (o 24h)\n"
-        "/informe_hoy — solo lo recopilado hoy\n"
+        "/informe_hoy — publicados hoy en web (fecha de publicación)\n"
         "/informe <días> <país> — ej. /informe 7 alemania\n"
         "/informe_mas — continuar el informe anterior\n"
         "/paises — países y regiones disponibles\n\n"
@@ -136,6 +137,14 @@ async def free_text_report(update: Update, context: ContextTypes.DEFAULT_TYPE) -
     await _send_report(update, mode="informe_pais", record=False, report_filter=report_filter)
 
 
+async def _reply_report_chunk(message, chunk: str) -> None:
+    await message.reply_text(
+        chunk,
+        parse_mode=ParseMode.HTML,
+        disable_web_page_preview=True,
+    )
+
+
 async def _send_continuation(update: Update) -> None:
     if not update.message or not update.effective_chat:
         return
@@ -164,7 +173,7 @@ async def _send_continuation(update: Update) -> None:
             )
         )
         for chunk in split_message(report.text):
-            await update.message.reply_text(chunk, disable_web_page_preview=True)
+            await _reply_report_chunk(update.message, chunk)
         if session.mode == "informe" and report.article_ids:
             await asyncio.to_thread(mark_articles_sent, report.article_ids)
             if not report.has_more:
@@ -212,7 +221,7 @@ async def _send_report(
         chunks = split_message(report.text)
 
         for chunk in chunks:
-            await update.message.reply_text(chunk, disable_web_page_preview=True)
+            await _reply_report_chunk(update.message, chunk)
 
         if record and report.article_ids:
             if report.has_more:
