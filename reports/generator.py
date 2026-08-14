@@ -371,8 +371,8 @@ def _empty_tag_message(
         )
     elif pending:
         lines.append(
-            "Espera a que termine la clasificación o ejecuta: "
-            "`python3 scripts/classify_pending.py`"
+            f"Hay {pending} artículo(s) sin clasificar en este periodo. "
+            "Vuelve a pedir el informe en 1-2 minutos. Si persiste, /retag."
         )
     elif in_window and not with_tag:
         lines.append(
@@ -415,9 +415,14 @@ def _empty_country_message(
     ]
     if pending:
         lines.append(
-            "Espera a que termine la clasificación o ejecuta: "
-            "`python3 scripts/classify_pending.py`"
+            f"Hay {pending} artículo(s) de {label} sin clasificar en este periodo. "
+            "Vuelve a pedir el informe en 1-2 minutos (el bot los procesa al generarlo). "
+            "Si persiste, ejecuta /retag."
         )
+        if report_filter.days and report_filter.days < 7:
+            lines.append(
+                f"Prueba un periodo más amplio: `/informe 7 {label.lower()}`."
+            )
     elif total_geo == 0:
         lines.append(
             "No hay artículos ingeridos de ese país. Ejecuta: "
