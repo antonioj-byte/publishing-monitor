@@ -10,6 +10,7 @@ import time
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.cron import CronTrigger
 from telegram.error import Conflict
+from telegram.constants import ParseMode
 from telegram.ext import Application, CommandHandler, ContextTypes, MessageHandler, filters
 from zoneinfo import ZoneInfo
 
@@ -88,6 +89,7 @@ async def job_informe_automatico(app: Application) -> None:
             await app.bot.send_message(
                 chat_id=chat_id,
                 text=chunk,
+                parse_mode=ParseMode.HTML,
                 disable_web_page_preview=True,
             )
 
