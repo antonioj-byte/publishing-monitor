@@ -7,6 +7,8 @@ import json
 import re
 
 from ai.translation import is_likely_untranslated
+from bot.config import settings
+from reports.dates import format_publication_display
 from reports.tags import tag_labels as topical_tag_labels
 
 
@@ -52,4 +54,10 @@ def format_article_entry(item: dict) -> str:
         except (json.JSONDecodeError, TypeError):
             pass
     url = esc(item["url"])
-    return f"📰 <b>{titular}</b>{source}\n{resumen}{tag_line}\n🔗 {url}"
+    pub_line = format_publication_display(
+        item.get("fecha_publicacion"),
+        timezone_name=settings.timezone,
+        fallback_ingesta=item.get("fecha_ingesta"),
+    )
+    date_block = f"\n📅 {esc(pub_line)}" if pub_line else ""
+    return f"📰 <b>{titular}</b>{source}\n{resumen}{tag_line}{date_block}\n🔗 {url}"

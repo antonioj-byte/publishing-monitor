@@ -109,11 +109,15 @@ class TelegramFormatTests(unittest.TestCase):
                 "url": "https://example.com/a",
                 "medio_nombre": "Le Monde Livres",
                 "medio_tier": 1,
+                "fecha_publicacion": "2026-08-14T09:00:00+00:00",
             }
         )
         self.assertIn("<b>Titular en castellano</b>", text)
         self.assertNotIn("Tier", text)
         self.assertIn("<i>Le Monde Livres</i>", text)
+        self.assertIn("📅 Publicado: 14/08/2026", text)
+        self.assertLess(text.index("Resumen breve."), text.index("📅"))
+        self.assertLess(text.index("📅"), text.index("🔗"))
 
 
 if __name__ == "__main__":
