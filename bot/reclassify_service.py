@@ -30,23 +30,32 @@ def reset_all_for_reclassify() -> int:
 
 
 def mark_untagged_for_reclassify() -> int:
+    """Mark every article without valid tags for reclassification."""
     with get_connection() as conn:
         count = conn.execute(
             """
             SELECT COUNT(*) FROM articulos
-            WHERE procesado = 1
-              AND (tags IS NULL OR tags = '' OR tags = '[]')
+            WHERE tags IS NULL OR tags = '' OR tags = '[]'
             """
         ).fetchone()[0]
         conn.execute(
             """
             UPDATE articulos SET procesado = 0
-            WHERE procesado = 1
-              AND (tags IS NULL OR tags = '' OR tags = '[]')
+            WHERE tags IS NULL OR tags = '' OR tags = '[]'
             """
         )
         conn.commit()
     return count
+
+
+def count_untagged() -> int:
+    with get_connection() as conn:
+        return conn.execute(
+            """
+            SELECT COUNT(*) FROM articulos
+            WHERE tags IS NULL OR tags = '' OR tags = '[]'
+            """
+        ).fetchone()[0]
 
 
 def count_tagged_processed() -> int:
@@ -54,8 +63,7 @@ def count_tagged_processed() -> int:
         return conn.execute(
             """
             SELECT COUNT(*) FROM articulos
-            WHERE procesado = 1
-              AND tags IS NOT NULL
+            WHERE tags IS NOT NULL
               AND tags != ''
               AND tags != '[]'
             """
@@ -150,6 +158,8 @@ def run_backfill_tags(
         total = conn.execute("SELECT COUNT(*) FROM articulos").fetchone()[0]
 
     queued = mark_untagged_for_reclassify()
+    untagged = count_untagged()
+    with_tags = count_tagged_processed()
     if queued == 0:
         return {
             "total": total,
@@ -157,7 +167,8 @@ def run_backfill_tags(
             "classified": 0,
             "failed": 0,
             "batches": 0,
-            "with_tags": count_tagged_processed(),
+            "with_tags": with_tags,
+            "untagged": untagged,
             "no_tags": 0,
         }
 
@@ -165,4 +176,5 @@ def run_backfill_tags(
     stats = _run_classify_batches(batch_size=batch_size, delay=delay)
     stats["total"] = total
     stats["queued"] = queued
+    stats["untagged"] = count_untagged()
     return stats

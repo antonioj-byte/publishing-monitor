@@ -105,9 +105,18 @@ _RESTART_RUNNING = False
 
 
 def _format_reclassify_result(stats: dict[str, int], *, mode: str) -> str:
-    if stats.get("queued", stats.get("total", 0)) == 0 and mode == "retag":
+    if stats.get("queued", 0) == 0 and mode == "retag":
+        with_tags = stats.get("with_tags", 0)
+        total = stats.get("total", 0)
+        untagged = stats.get("untagged", 0)
+        if untagged > 0:
+            return (
+                f"Hay {untagged} artículos sin tags pero no se pudieron encolar.\n"
+                f"Con tags: {with_tags} de {total}.\n"
+                "Prueba /reclasificar."
+            )
         return (
-            f"Todos los artículos ya tienen tags ({stats.get('with_tags', 0)} en total)."
+            f"Todos los artículos tienen tags ({with_tags} de {total})."
         )
     if stats.get("with_tags", 0) == 0 and stats.get("classified", 0) == 0:
         return (
