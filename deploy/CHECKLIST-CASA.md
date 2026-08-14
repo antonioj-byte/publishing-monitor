@@ -47,9 +47,24 @@ Guarda. Railway redeployará solo.
 
 Sin esto pierdes la base de datos en cada actualización.
 
-1. En el servicio → **Volumes** → **Add Volume**.
-2. **Mount path:** `/app/data`
-3. Tamaño: **1 GB** (suficiente).
+Railway **no** pone el volumen dentro del servicio en el menú lateral. Hazlo así:
+
+**Opción A — atajo (Mac):**
+1. En el proyecto Railway, pulsa **`⌘ + K`** (Command + K).
+2. Escribe **`New Volume`** o **`Volume`**.
+3. Elige tu servicio (el del bot).
+4. **Mount path:** `/app/data` (no uses `/app` solo — borraría el código).
+5. Tamaño: **1 GB**.
+
+**Opción B — clic derecho:**
+1. En la vista del proyecto (canvas con cajas), **clic derecho en el espacio vacío**.
+2. **Create Volume** / **New Volume**.
+3. Conecta al servicio del bot → mount path **`/app/data`**.
+
+**Opción C — dentro del servicio (si tu UI lo muestra):**
+1. Abre el servicio → **Settings** → busca **Volumes** → **Add Volume**.
+
+Tras crearlo, redeploy (o espera el siguiente deploy automático).
 
 ## Paso 6 — Comprobar logs
 

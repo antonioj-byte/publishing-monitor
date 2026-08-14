@@ -37,9 +37,13 @@ Opcional: `MAX_DESTACADOS`, `MAX_RELEVANTES`, `MAX_SECUNDARIOS`, `MAX_ARTICLES_P
 
 Sin volumen pierdes la base de datos en cada redeploy.
 
-1. En el servicio → **Volumes** → **Add Volume**.
-2. Montaje: **`/app/data`**
-3. Tamaño mínimo (1 GB basta).
+Railway crea volúmenes **desde el canvas del proyecto**, no siempre dentro del servicio:
+
+1. **`⌘ + K`** (Mac) o **Ctrl + K** → escribe **New Volume**  
+   **o** clic derecho en el espacio vacío del canvas → **Create Volume**
+2. Conecta el volumen al servicio del bot.
+3. **Mount path:** **`/app/data`** (nunca `/app` a secas)
+4. Tamaño mínimo (1 GB basta).
 
 ### 4. Desplegar
 
