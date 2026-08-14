@@ -26,6 +26,8 @@ En el servicio → **Variables**, añade (copia de tu `.env`):
 | Variable | Obligatoria |
 |----------|-------------|
 | `GOOGLE_API_KEY` + `CLASSIFY_PROVIDER=gemini` | Sí (recomendado, más barato) |
+| `GEMINI_MODEL` | Opcional (`gemini-2.5-flash` por defecto) |
+| `GEMINI_FALLBACK_MODEL` | Opcional (`gemini-3.1-flash-lite`; no uses `gemini-2.5-flash-lite`) |
 | `ANTHROPIC_API_KEY` | Alternativa a Gemini |
 | `TELEGRAM_BOT_TOKEN` | Sí |
 | `TELEGRAM_CHAT_ID` | Sí |
