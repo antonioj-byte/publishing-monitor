@@ -15,7 +15,12 @@ from db.connection import get_connection
 from db.models import Categoria, ReportFilter
 from medios_tiers import get_tier, tier_label
 from reports.session import ReportSession, save_session
-from reports.prioritize import events_to_trends, limit_batch_for_prioritization, prioritize_articles
+from reports.prioritize import (
+    _article_priority_key,
+    events_to_trends,
+    limit_batch_for_prioritization,
+    prioritize_articles,
+)
 
 CATEGORY_HEADERS: dict[Categoria, str] = {
     "ideas": "📚 Ideas del mundo editorial",
@@ -272,22 +277,92 @@ def _order_articles(articles: list[dict]) -> list[dict]:
     return ordered
 
 
+def _collapse_events_for_report(articles: list[dict]) -> list[dict]:
+    """
+    One article per editorial event in the report body.
+
+    Multi-source events are summarized in 📡 En varios medios; the body keeps
+    the best single entry so trade press does not fill the word budget.
+    """
+    by_event: dict[int, list[dict]] = {}
+    orphans: list[dict] = []
+    event_order: list[int] = []
+
+    for article in articles:
+        event_id = article.get("event_id")
+        if event_id is None:
+            orphans.append(article)
+            continue
+        if event_id not in by_event:
+            event_order.append(event_id)
+        by_event.setdefault(event_id, []).append(article)
+
+    collapsed: list[dict] = []
+    for event_id in event_order:
+        cluster = by_event[event_id]
+        best = min(cluster, key=_article_priority_key)
+        collapsed.append(best)
+
+    collapsed.extend(orphans)
+    return collapsed
+
+
+def _round_robin_by_medio(candidates: list[dict], limit: int) -> list[dict]:
+    """Pick up to `limit` articles rotating across medios (fair source mix)."""
+    if limit <= 0 or not candidates:
+        return []
+
+    by_medio: dict[str, list[dict]] = {}
+    for article in candidates:
+        medio = article.get("medio_nombre") or "?"
+        by_medio.setdefault(medio, []).append(article)
+
+    medio_counts: dict[str, int] = {name: 0 for name in by_medio}
+    max_per_medio = max(1, settings.max_articles_per_medio)
+    picked: list[dict] = []
+
+    while len(picked) < limit:
+        progressed = False
+        for medio in sorted(
+            by_medio.keys(),
+            key=lambda name: (medio_counts[name], name),
+        ):
+            if medio_counts[medio] >= max_per_medio:
+                continue
+            queue = by_medio[medio]
+            if not queue:
+                continue
+            picked.append(queue.pop(0))
+            medio_counts[medio] += 1
+            progressed = True
+            if len(picked) >= limit:
+                break
+        if not progressed:
+            break
+
+    return picked
+
+
 def _apply_report_limits(articles: list[dict]) -> list[dict]:
-    """Apply configured score and total limits while preserving priority order."""
+    """Apply score/total limits with round-robin across medios within each tier."""
     per_score_limits = {score: limit for score, _, limit in _relevance_tiers()}
-    counts = {score: 0 for score in per_score_limits}
+    by_score: dict[int, list[dict]] = {}
+    for article in articles:
+        score = int(article.get("relevance_score") or 3)
+        by_score.setdefault(score, []).append(article)
+
     limited: list[dict] = []
     total_limit = max(0, settings.max_articles_per_informe)
 
-    for article in articles:
-        score = int(article.get("relevance_score") or 3)
+    for score, _, _ in _relevance_tiers():
         score_limit = max(0, per_score_limits.get(score, 0))
-        if counts.get(score, 0) >= score_limit:
+        if score_limit <= 0:
             continue
-        if total_limit and len(limited) >= total_limit:
-            break
-        limited.append(article)
-        counts[score] = counts.get(score, 0) + 1
+        tier_picks = _round_robin_by_medio(by_score.get(score, []), score_limit)
+        for article in tier_picks:
+            if total_limit and len(limited) >= total_limit:
+                return limited
+            limited.append(article)
 
     return limited
 
@@ -559,7 +634,8 @@ def build_report(
             )
 
         trends = events_to_trends(prioritization.events)
-        ordered = _apply_report_limits(_order_articles(prioritization.articles))
+        collapsed = _collapse_events_for_report(prioritization.articles)
+        ordered = _apply_report_limits(_order_articles(collapsed))
         total_matched = len(ordered)
         all_ids = [a["id"] for a in ordered]
         start_cursor = 0

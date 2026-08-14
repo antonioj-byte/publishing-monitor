@@ -138,7 +138,7 @@ class PrioritizeScoringTests(unittest.TestCase):
         self.assertEqual([article["id"] for article in ordered], [3, 2, 1])
         self.assertEqual(_pick_representative_title(articles), "Destacado")
 
-    def test_capped_batch_prefers_tier1_for_equal_scores(self) -> None:
+    def test_capped_batch_uses_score_not_tier(self) -> None:
         from unittest.mock import patch
 
         articles = [
@@ -151,7 +151,7 @@ class PrioritizeScoringTests(unittest.TestCase):
             {
                 "id": 2,
                 "medio_tier": 1,
-                "relevance_score": 4,
+                "relevance_score": 3,
                 "fecha_ingesta": "2026-08-13T10:00:00+00:00",
             },
         ]
@@ -159,7 +159,7 @@ class PrioritizeScoringTests(unittest.TestCase):
         with patch("reports.prioritize.settings", limited_settings):
             batch, total = limit_batch_for_prioritization(articles)
         self.assertEqual(total, 2)
-        self.assertEqual(batch[0]["id"], 2)
+        self.assertEqual(batch[0]["id"], 1)
 
 
 if __name__ == "__main__":

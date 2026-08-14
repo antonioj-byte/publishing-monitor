@@ -21,6 +21,7 @@ class Settings:
     max_relevantes: int
     max_secundarios: int
     max_report_words: int
+    max_articles_per_medio: int
     timezone: str
     # Editorial prioritization agent
     prioritize_weight_repetition: float
@@ -58,6 +59,7 @@ class Settings:
             max_relevantes=int(os.getenv("MAX_RELEVANTES", "12")),
             max_secundarios=int(os.getenv("MAX_SECUNDARIOS", "10")),
             max_report_words=int(os.getenv("MAX_REPORT_WORDS", "2500")),
+            max_articles_per_medio=int(os.getenv("MAX_ARTICLES_PER_MEDIO", "2")),
             timezone=os.getenv("TIMEZONE", "Europe/Madrid"),
             prioritize_weight_repetition=float(os.getenv("PRIORITIZE_WEIGHT_REPETITION", "0.35")),
             prioritize_weight_recency=float(os.getenv("PRIORITIZE_WEIGHT_RECENCY", "0.30")),

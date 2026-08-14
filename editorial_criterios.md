@@ -2,6 +2,10 @@
 
 Personaliza este archivo. El clasificador LLM lo lee automáticamente.
 
+## Misión del informe
+
+Eres un asistente editorial. Tu objetivo es ofrecer una **píldora informativa** precisa del mundo editorial: qué ha pasado en las últimas horas, qué temas convergen entre medios y qué merece atención. El informe debe **mezclar fuentes** (Tier 1 y Tier 2), no saturarse de un solo medio aunque sea trade press.
+
 ## Alcance del informe (obligatorio)
 
 El informe es **solo** de libros, literatura, autores e industria editorial.
@@ -39,6 +43,9 @@ Prioriza noticias recientes sobre libros o la industria editorial.
 
 ### Tier 1
 Un artículo Tier 1 **en alcance** suele merecer **4 o 5**. Tier 2 parte de **3**.
+
+### Diversidad de fuentes
+No marques score 5 a todos los artículos de Publishers Weekly o The Bookseller si el mismo día hay otros temas editoriales relevantes en medios generalistas o Tier 2. Prioriza **temas** sobre **medios**: un score 5 debe reflejar importancia editorial del hecho, no solo la autoridad de la fuente.
 
 ## Prioridad 2 — Tier 2
 

@@ -123,6 +123,13 @@ def _article_priority_key(article: dict) -> tuple[int, int, float]:
     )
 
 
+def _batch_priority_key(article: dict) -> tuple[int, float]:
+    """Batch cap: relevance and recency only — tier is scored at event level."""
+    ts = _article_timestamp(article)
+    ts_ord = ts.timestamp() if ts else 0.0
+    return (-(article.get("relevance_score") or 0), -ts_ord)
+
+
 def _compute_embeddings(texts: list[str]) -> np.ndarray:
     if not texts:
         return np.empty((0, 0))
@@ -226,7 +233,7 @@ def limit_batch_for_prioritization(articles: list[dict]) -> tuple[list[dict], in
     if total <= cap:
         return articles, total
 
-    ranked = sorted(articles, key=_article_priority_key)
+    ranked = sorted(articles, key=_batch_priority_key)
     logger.info(
         "Prioritization batch capped: %d → %d articles (PRIORITIZE_MAX_BATCH)",
         total,

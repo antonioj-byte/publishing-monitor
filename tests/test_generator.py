@@ -15,6 +15,7 @@ from bot.config import settings
 from reports.generator import (
     _apply_report_limits,
     _build_pages,
+    _collapse_events_for_report,
     _fetch_articles,
     split_message,
 )
@@ -46,6 +47,38 @@ class ReportLimitTests(unittest.TestCase):
             limited = _apply_report_limits(articles)
 
         self.assertEqual([item["id"] for item in limited], [1, 2, 5, 6, 9])
+
+    def test_round_robin_limits_per_medio(self) -> None:
+        articles = [
+            {"id": 1, "relevance_score": 5, "categoria": "noticias", "medio_nombre": "Publishers Weekly"},
+            {"id": 2, "relevance_score": 5, "categoria": "noticias", "medio_nombre": "Publishers Weekly"},
+            {"id": 3, "relevance_score": 5, "categoria": "noticias", "medio_nombre": "El País Babelia"},
+            {"id": 4, "relevance_score": 5, "categoria": "noticias", "medio_nombre": "The Bookseller"},
+        ]
+        limited_settings = replace(
+            settings,
+            max_destacados=3,
+            max_relevantes=0,
+            max_secundarios=0,
+            max_articles_per_informe=10,
+            max_articles_per_medio=1,
+        )
+        with patch("reports.generator.settings", limited_settings):
+            limited = _apply_report_limits(articles)
+
+        medios = [item["medio_nombre"] for item in limited]
+        self.assertEqual(len(limited), 3)
+        self.assertEqual(len(set(medios)), 3)
+        self.assertEqual(medios.count("Publishers Weekly"), 1)
+
+    def test_collapses_multiple_articles_from_same_event(self) -> None:
+        articles = [
+            {"id": 1, "event_id": 10, "relevance_score": 5, "medio_tier": 1, "medio_nombre": "PW"},
+            {"id": 2, "event_id": 10, "relevance_score": 4, "medio_tier": 1, "medio_nombre": "Bookseller"},
+            {"id": 3, "event_id": 11, "relevance_score": 4, "medio_tier": 2, "medio_nombre": "Reforma"},
+        ]
+        collapsed = _collapse_events_for_report(articles)
+        self.assertEqual([item["id"] for item in collapsed], [1, 3])
 
     def test_oversized_first_article_advances_pagination_cursor(self) -> None:
         article = {
