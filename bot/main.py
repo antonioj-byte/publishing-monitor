@@ -27,6 +27,7 @@ from bot.telegram_handlers import (
     paises_command,
     ping_command,
     reclasificar_command,
+    reiniciar_command,
     start_command,
     tag_command,
     tags_command,
@@ -221,6 +222,7 @@ def build_application() -> Application:
     app.add_handler(CommandHandler("tags", tags_command))
     app.add_handler(CommandHandler("tag", tag_command))
     app.add_handler(CommandHandler("reclasificar", reclasificar_command))
+    app.add_handler(CommandHandler("reiniciar", reiniciar_command))
     app.add_handler(MessageHandler(filters.COMMAND, unknown_command))
     app.add_handler(
         MessageHandler(
@@ -252,6 +254,7 @@ async def main_async() -> None:
                 BotCommand("tag", "Informe por tag: /tag ficcion 7"),
                 BotCommand("paises", "Países y regiones"),
                 BotCommand("reclasificar", "Reclasificar artículos con tags"),
+                BotCommand("reiniciar", "Reiniciar el bot"),
             ]
         )
 
@@ -272,6 +275,7 @@ async def main_async() -> None:
         )
 
         scheduler = setup_scheduler(app)
+        app.bot_data["scheduler"] = scheduler
         scheduler.start()
         asyncio.create_task(_prewarm_embeddings_background())
         asyncio.create_task(_heartbeat_loop())
