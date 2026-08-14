@@ -1,4 +1,8 @@
-"""Article classification via Gemini or Anthropic."""
+"""Article classification via a configurable LLM provider (Gemini or Anthropic).
+
+This module only orchestrates: retries, offline fallback, DB writes. Vendor
+SDK calls live in ai/llm_provider.py.
+"""
 
 from __future__ import annotations
 
@@ -6,9 +10,7 @@ import json
 import logging
 import time
 
-import anthropic
-
-from ai.gemini_client import generate_json, verify_gemini_api
+from ai.llm_provider import LLMAuthError, LLMQuotaError, get_provider
 from ai.llm_shared import (
     ClassificationResult,
     build_user_message,
@@ -23,31 +25,15 @@ from medios_tiers import get_tier
 
 logger = logging.getLogger(__name__)
 
-# Anthropic models (fallback provider)
-ANTHROPIC_MODEL = "claude-haiku-4-5"
-ANTHROPIC_FALLBACK_MODEL = "claude-sonnet-5"
-
-# Backward compatibility for health_check / bot_status
-def active_model() -> str:
-    if settings.classify_provider == "gemini":
-        return settings.gemini_model
-    return ANTHROPIC_MODEL
-
-
-def active_fallback_model() -> str:
-    if settings.classify_provider == "gemini":
-        return settings.gemini_fallback_model
-    return ANTHROPIC_FALLBACK_MODEL
-
-
-MODEL = ANTHROPIC_MODEL
-FALLBACK_MODEL = ANTHROPIC_FALLBACK_MODEL
-
 _API_AUTH_FAILED = False
 
 
 def active_provider() -> str:
     return settings.classify_provider
+
+
+def active_model() -> str:
+    return get_provider(settings).primary_model
 
 
 def reset_api_auth_state() -> None:
@@ -58,62 +44,15 @@ def reset_api_auth_state() -> None:
 def verify_classify_api() -> None:
     """Raise RuntimeError if the configured classify API is unavailable."""
     reset_api_auth_state()
-    if settings.classify_provider == "gemini":
-        verify_gemini_api()
-    else:
-        verify_anthropic_api()
-
-
-def verify_anthropic_api() -> None:
-    """Raise RuntimeError if Anthropic cannot classify (key, credits, models)."""
-    reset_api_auth_state()
-    if not settings.anthropic_api_key:
-        raise RuntimeError(
-            "ANTHROPIC_API_KEY no configurada. Añádela en Railway → Variables."
-        )
-
-    client = anthropic.Anthropic(api_key=settings.anthropic_api_key)
-    last_error: Exception | None = None
-    for model in (ANTHROPIC_MODEL, ANTHROPIC_FALLBACK_MODEL):
-        try:
-            client.messages.create(
-                model=model,
-                max_tokens=20,
-                messages=[{"role": "user", "content": "Responde solo: ok"}],
-            )
-            return
-        except anthropic.AuthenticationError as exc:
-            raise RuntimeError(
-                "ANTHROPIC_API_KEY inválida. Renueva la clave en console.anthropic.com."
-            ) from exc
-        except anthropic.BadRequestError as exc:
-            if "credit balance" in str(exc).lower():
-                raise RuntimeError(
-                    "Créditos de Anthropic agotados. Recarga en "
-                    "console.anthropic.com → Plans & Billing."
-                ) from exc
-            raise RuntimeError(f"Anthropic rechazó la petición: {exc}") from exc
-        except anthropic.NotFoundError as exc:
-            last_error = exc
-            continue
-        except anthropic.APIError as exc:
-            last_error = exc
-            if model == ANTHROPIC_FALLBACK_MODEL:
-                raise RuntimeError(f"Anthropic API error: {exc}") from exc
-            continue
-
-    raise RuntimeError(f"Ningún modelo Anthropic disponible: {last_error}")
+    get_provider(settings).verify_api()
 
 
 def _api_unavailable_error(reason: str) -> RuntimeError:
-    if settings.classify_provider == "gemini":
-        return RuntimeError(
-            "Gemini API no disponible para reclasificación con tags "
-            f"({reason}). Revisa GOOGLE_API_KEY en Railway."
-        )
+    provider = get_provider(settings)
     return RuntimeError(
-        "Anthropic API no disponible para reclasificación con tags "
-        f"({reason}). Revisa ANTHROPIC_API_KEY y créditos en console.anthropic.com."
+        f"{provider.label} no disponible para reclasificación con tags "
+        f"({reason}). Revisa {provider.key_env_name} en Railway "
+        f"({provider.setup_url})."
     )
 
 
@@ -133,19 +72,13 @@ def classify_offline(
     from ai.editorial_filter import is_editorial_scope
 
     in_scope = is_editorial_scope(titulo=titulo, resumen=resumen)
-    provider = settings.classify_provider
+    provider = get_provider(settings)
     if idioma != "es":
         if reason == "auth":
-            if provider == "gemini":
-                summary = (
-                    "Resumen no disponible: GOOGLE_API_KEY inválida o sin cuota. "
-                    "Actualiza .env y ejecuta /retag."
-                )
-            else:
-                summary = (
-                    "Resumen no disponible: API key inválida o expirada. "
-                    "Actualiza .env y ejecuta /retag."
-                )
+            summary = (
+                f"Resumen no disponible: {provider.key_env_name} inválida o sin "
+                "cuota/créditos. Actualiza .env y ejecuta /retag."
+            )
         else:
             summary = (
                 "Resumen no disponible en castellano (clasificación offline). "
@@ -167,60 +100,6 @@ def classify_offline(
         tags=[],
         en_alcance=in_scope,
     )
-
-
-def _classify_with_gemini(
-    *,
-    user_msg: str,
-    titulo: str,
-    resumen: str | None,
-) -> ClassificationResult:
-    system_prompt = load_system_prompt()
-    last_error: Exception | None = None
-    for model in (settings.gemini_model, settings.gemini_fallback_model):
-        try:
-            raw = generate_json(system_prompt=system_prompt, user_msg=user_msg, model=model)
-            return finalize_result(
-                titulo=titulo,
-                resumen=resumen,
-                result=parse_response(raw),
-            )
-        except Exception as exc:
-            last_error = exc
-            logger.warning("Gemini model %s failed: %s", model, exc)
-            continue
-    raise RuntimeError(f"Gemini classification failed: {last_error}")
-
-
-def _classify_with_anthropic(
-    *,
-    user_msg: str,
-    titulo: str,
-    resumen: str | None,
-) -> ClassificationResult:
-    client = anthropic.Anthropic(api_key=settings.anthropic_api_key)
-    system_prompt = load_system_prompt()
-    for model in (ANTHROPIC_MODEL, ANTHROPIC_FALLBACK_MODEL):
-        try:
-            response = client.messages.create(
-                model=model,
-                max_tokens=600,
-                system=system_prompt,
-                messages=[{"role": "user", "content": user_msg}],
-            )
-            block = next(b for b in response.content if b.type == "text")
-            return finalize_result(
-                titulo=titulo,
-                resumen=resumen,
-                result=parse_response(block.text),
-            )
-        except anthropic.NotFoundError:
-            continue
-        except anthropic.APIError:
-            if model == ANTHROPIC_FALLBACK_MODEL:
-                raise
-            continue
-    raise RuntimeError("Anthropic classification failed for all models")
 
 
 def classify_article(
@@ -263,23 +142,20 @@ def classify_article(
         fecha_publicacion=fecha_publicacion,
     )
 
+    provider = get_provider(settings)
+    system_prompt = load_system_prompt()
     try:
-        if settings.classify_provider == "gemini":
-            return _classify_with_gemini(
-                user_msg=user_msg,
-                titulo=titulo,
-                resumen=resumen,
-            )
-        return _classify_with_anthropic(
-            user_msg=user_msg,
+        raw = provider.generate_json(system_prompt=system_prompt, user_msg=user_msg)
+        return finalize_result(
             titulo=titulo,
             resumen=resumen,
+            result=parse_response(raw),
         )
-    except anthropic.AuthenticationError as exc:
+    except (LLMAuthError, LLMQuotaError) as exc:
         _API_AUTH_FAILED = True
-        logger.error("Anthropic auth failed — offline fallback", exc_info=exc)
+        logger.error("%s auth/quota failed — offline fallback", provider.name, exc_info=exc)
         if not allow_offline:
-            raise _api_unavailable_error("clave inválida") from exc
+            raise _api_unavailable_error(str(exc)) from exc
         return classify_offline(
             titulo=titulo,
             resumen=resumen,
@@ -287,37 +163,6 @@ def classify_article(
             idioma=idioma,
             reason="auth",
         )
-    except anthropic.BadRequestError as exc:
-        if "credit balance" in str(exc).lower():
-            _API_AUTH_FAILED = True
-            logger.error("Anthropic credits exhausted", exc_info=exc)
-            if not allow_offline:
-                raise _api_unavailable_error("créditos agotados") from exc
-            return classify_offline(
-                titulo=titulo,
-                resumen=resumen,
-                categoria_default=categoria_default,
-                idioma=idioma,
-                reason="auth",
-            )
-        raise
-    except Exception as exc:
-        err = str(exc).lower()
-        if settings.classify_provider == "gemini" and (
-            "api key" in err or "quota" in err or "billing" in err or "401" in err
-        ):
-            _API_AUTH_FAILED = True
-            logger.error("Gemini API failed — offline fallback", exc_info=exc)
-            if not allow_offline:
-                raise _api_unavailable_error(str(exc)) from exc
-            return classify_offline(
-                titulo=titulo,
-                resumen=resumen,
-                categoria_default=categoria_default,
-                idioma=idioma,
-                reason="auth",
-            )
-        raise
 
 
 def classify_pending(

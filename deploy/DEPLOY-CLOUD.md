@@ -7,7 +7,7 @@ El bot en Telegram funciona desde el móvil, pero **el proceso del bot** debe es
 1. Para el bot en Cursor cloud y en tu Mac (solo **una** instancia puede usar el token):
    - Cierra sesiones cloud / para procesos locales si los tienes.
 2. Ten a mano tu `.env` con:
-   - `ANTHROPIC_API_KEY`
+   - `GOOGLE_API_KEY` (recomendado, ~10× más barato) o `ANTHROPIC_API_KEY`
    - `TELEGRAM_BOT_TOKEN`
    - `TELEGRAM_CHAT_ID`
 
@@ -25,7 +25,8 @@ En el servicio → **Variables**, añade (copia de tu `.env`):
 
 | Variable | Obligatoria |
 |----------|-------------|
-| `ANTHROPIC_API_KEY` | Sí |
+| `GOOGLE_API_KEY` + `CLASSIFY_PROVIDER=gemini` | Sí (recomendado, más barato) |
+| `ANTHROPIC_API_KEY` | Alternativa a Gemini |
 | `TELEGRAM_BOT_TOKEN` | Sí |
 | `TELEGRAM_CHAT_ID` | Sí |
 | `DATABASE_PATH` | `/app/data/editorial.db` |

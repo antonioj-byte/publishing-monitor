@@ -18,6 +18,7 @@ from bot.reclassify_service import run_backfill_tags, run_reclassify_all
 from bot.report_parser import parse_command_args, parse_free_text
 from bot.restart_service import detect_restart_method, restart_bot, restart_method_hint
 from ai.classify import active_model, active_provider
+from ai.llm_provider import get_provider
 from bot.version import BOT_VERSION
 from db.models import ReportFilter
 from reports.generator import mark_articles_sent, record_informe, split_message
@@ -107,15 +108,8 @@ _RESTART_RUNNING = False
 
 
 def _classify_api_hint() -> str:
-    if settings.classify_provider == "gemini":
-        return (
-            "Revisa GOOGLE_API_KEY en Railway "
-            "(https://aistudio.google.com/apikey) "
-        )
-    return (
-        "Revisa ANTHROPIC_API_KEY y créditos en Railway "
-        "(console.anthropic.com → Plans & Billing) "
-    )
+    provider = get_provider(settings)
+    return f"Revisa {provider.key_env_name} y créditos en Railway ({provider.setup_url}) "
 
 
 def _format_reclassify_result(stats: dict[str, int], *, full_reset: bool) -> str:

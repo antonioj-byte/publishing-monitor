@@ -426,8 +426,7 @@ def score_event_cluster(
 def prioritize_articles(
     articles: list[dict],
     *,
-    window_days: int | None = None,
-    catalog_mode: bool = False,
+    recency_window_days: int | None = None,
 ) -> PrioritizationResult:
     """
     Run the full editorial prioritization pipeline:
@@ -435,8 +434,10 @@ def prioritize_articles(
     2. Weighted scoring (repetition + recency + tier)
     3. Filter by configurable threshold and sort
 
-    catalog_mode: for multi-day tag/country reports — include all events
-    (threshold 0) and scale recency across the full window.
+    recency_window_days: for multi-day catalog reports (tag/país) — scales
+    recency across the full window instead of the 24-48h breaking-news
+    cliff, and skips the score threshold so singleton events are still
+    included. Leave as None for daily-digest reports (default behavior).
     """
     if not articles:
         return PrioritizationResult(
@@ -453,12 +454,14 @@ def prioritize_articles(
     events: list[EditorialEvent] = []
     for idx, cluster in enumerate(clusters):
         events.append(
-            score_event_cluster(cluster, event_id=idx, now=now, window_days=window_days)
+            score_event_cluster(
+                cluster, event_id=idx, now=now, window_days=recency_window_days
+            )
         )
 
     events.sort(key=lambda e: (-e.score.total, -e.score.distinct_sources))
 
-    threshold = 0.0 if catalog_mode else settings.prioritize_score_threshold
+    threshold = 0.0 if recency_window_days else settings.prioritize_score_threshold
     selected = [e for e in events if e.score.total >= threshold]
 
     output_articles: list[dict] = []
