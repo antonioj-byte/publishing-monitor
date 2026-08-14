@@ -1,0 +1,20 @@
+# Fly.io — bot 24/7 con volumen persistente para la base de datos.
+# Sustituye el nombre de la app tras: fly apps create <nombre-unico>
+
+app = "editorial-bot-monitor"
+primary_region = "cdg"
+
+[build]
+  dockerfile = "Dockerfile"
+
+[env]
+  DATABASE_PATH = "/app/data/editorial.db"
+  TIMEZONE = "Europe/Madrid"
+
+[mounts]
+  source = "editorial_data"
+  destination = "/app/data"
+
+[[vm]]
+  size = "shared-cpu-1x"
+  memory = "1gb"

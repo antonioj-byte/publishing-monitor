@@ -1,0 +1,13 @@
+services:
+  bot:
+    build: .
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      DATABASE_PATH: /app/data/editorial.db
+      TIMEZONE: Europe/Madrid
+    volumes:
+      - editorial_data:/app/data
+
+volumes:
+  editorial_data:

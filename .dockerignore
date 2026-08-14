@@ -1,0 +1,13 @@
+.env
+.env.local
+.venv
+venv
+__pycache__
+*.py[cod]
+.pytest_cache
+.git
+data
+*.db
+deploy/run-bot.sh
+.DS_Store
+README.md

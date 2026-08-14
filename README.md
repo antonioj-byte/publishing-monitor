@@ -109,6 +109,8 @@ Solo responde al `TELEGRAM_CHAT_ID` configurado (uso personal).
 
 Para dejarlo siempre activo en Mac: `./deploy/install-launchd.sh`
 
+**Vacaciones / 24/7 sin Mac:** despliegue en Railway o Fly.io → [`deploy/DEPLOY-CLOUD.md`](deploy/DEPLOY-CLOUD.md)
+
 ## Bot + scheduler
 
 ```bash
