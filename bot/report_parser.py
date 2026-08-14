@@ -1,4 +1,4 @@
-"""Parse Telegram report requests (days + country/region + tags)."""
+"""Parse Telegram report requests (days + country/region + one tag)."""
 
 from __future__ import annotations
 
@@ -7,6 +7,8 @@ from dataclasses import dataclass
 
 from reports.paises import MAX_REPORT_DAYS, resolve_location
 from reports.tags import extract_tags_from_text, resolve_tag, tag_labels
+
+DEFAULT_FILTER_DAYS = 7
 
 
 @dataclass
@@ -29,6 +31,8 @@ def _clamp_days(days: int) -> int:
 
 def _resolve_location_and_tags(blob: str) -> tuple[list[str], list[str], str | None, str | None, str | None]:
     tags, remainder = extract_tags_from_text(blob)
+    # Un solo tag por informe
+    tags = tags[:1]
     labels = tag_labels(tags)
     remainder = re.sub(r"^(?:en|de)\s+", "", remainder, flags=re.IGNORECASE).strip()
     if remainder:
@@ -38,27 +42,61 @@ def _resolve_location_and_tags(blob: str) -> tuple[list[str], list[str], str | N
     return tags, labels, pais, region, label
 
 
-def _parse_token_blob(args: list[str]) -> tuple[int | None, str]:
+def _parse_tokens(args: list[str]) -> tuple[int | None, list[str], list[str], str | None, str | None, str | None]:
+    """Parse mixed-order tokens: days, one tag, optional location."""
     days: int | None = None
-    other: list[str] = []
+    tag: str | None = None
+    location_parts: list[str] = []
+
     for arg in args:
         if arg.isdigit() and days is None:
             days = int(arg)
             continue
-        other.append(arg)
-    return days, " ".join(other)
+        key, _ = resolve_tag(arg)
+        if key:
+            if tag is None:
+                tag = key
+            continue
+        location_parts.append(arg)
+
+    tags = [tag] if tag else []
+    labels = tag_labels(tags)
+
+    blob = " ".join(location_parts).strip()
+    if blob and not tags:
+        found, remainder = extract_tags_from_text(blob)
+        if found:
+            tags = [found[0]]
+            labels = tag_labels(tags)
+            blob = remainder.strip()
+
+    pais = region = label = None
+    if blob:
+        blob = re.sub(r"^(?:en|de)\s+", "", blob, flags=re.IGNORECASE).strip()
+        if blob:
+            pais, region, label = resolve_location(blob)
+
+    return days, tags, labels, pais, region, label
 
 
-def _build_request(days: int, blob: str) -> ParsedReportRequest:
-    tags, labels, pais, region, label = _resolve_location_and_tags(blob)
-    if not tags and not pais and not region:
+def _build_request(
+    *,
+    days: int | None,
+    tags: list[str],
+    labels: list[str],
+    pais: str | None,
+    region: str | None,
+    label: str | None,
+) -> ParsedReportRequest:
+    if not tags and not pais and not region and days is None:
         raise ValueError(
-            "Indica un país/región o un tag editorial.\n"
-            "Ejemplos: /informe 7 alemania · /informe 7 ficcion · /tag poesia 14\n"
-            "Ver: /paises · /tags"
+            "Indica al menos un filtro: días, país/región o tag.\n"
+            "Ejemplos: /informe 7 ficcion · /informe alemania · /informe 14\n"
+            "Ver filtros: /tags"
         )
+    effective_days = _clamp_days(days if days is not None else DEFAULT_FILTER_DAYS)
     return ParsedReportRequest(
-        days=_clamp_days(days),
+        days=effective_days,
         pais=pais,
         region=region,
         location_label=label,
@@ -69,69 +107,23 @@ def _build_request(days: int, blob: str) -> ParsedReportRequest:
 
 def parse_command_args(args: list[str]) -> ParsedReportRequest | None:
     """
-    /informe 7 alemania
+    /informe              → None (informe diario)
     /informe 7 ficcion
-    /informe 7 alemania ficcion
-    Returns None if no custom filter args (default informe).
+    /informe ficcion 7 alemania
+    /informe alemania
+    /informe 7
     """
     if not args:
         return None
 
-    days, blob = _parse_token_blob(args)
-    if days is None or not blob:
-        raise ValueError(
-            "Uso: /informe <días> <país|tag> [<tag>]\n"
-            "Ejemplos: /informe 7 alemania · /informe 7 ficcion\n"
-            "Ver: /paises · /tags"
-        )
-    return _build_request(days, blob)
-
-
-def parse_tag_command_args(args: list[str]) -> ParsedReportRequest:
-    """
-    /tag ficcion 7
-    /tag poesia 7 alemania
-    """
-    if not args:
-        raise ValueError(
-            "Uso: /tag <tag> <días> [<país>]\n"
-            "Ejemplo: /tag ficcion 7 · /tag ferias_premios 14 españa"
-        )
-
-    days: int | None = None
-    tags: list[str] = []
-    location_parts: list[str] = []
-
-    for arg in args:
-        if arg.isdigit():
-            days = int(arg)
-            continue
-        key, _ = resolve_tag(arg)
-        if key:
-            if key not in tags:
-                tags.append(key)
-        else:
-            location_parts.append(arg)
-
-    if not tags:
-        raise ValueError("Indica un tag válido. Ver /tags")
-
-    labels = tag_labels(tags)
-    blob = " ".join(location_parts).strip()
-    pais = region = label = None
-    if blob:
-        pais, region, label = resolve_location(blob)
-
-    if days is None:
-        raise ValueError("Indica el número de días. Ejemplo: /tag ficcion 7")
-
-    return ParsedReportRequest(
-        days=_clamp_days(days),
+    days, tags, labels, pais, region, label = _parse_tokens(args)
+    return _build_request(
+        days=days,
+        tags=tags,
+        labels=labels,
         pais=pais,
         region=region,
-        location_label=label,
-        tags=tags,
-        tag_labels=labels,
+        label=label,
     )
 
 
@@ -170,8 +162,16 @@ def parse_free_text(text: str) -> ParsedReportRequest | None:
         else:
             days = int(match.group(1))
             blob = match.group(2).strip().rstrip("?.!")
+        tags, labels, pais, region, label = _resolve_location_and_tags(blob)
         try:
-            return _build_request(days, blob)
+            return _build_request(
+                days=days,
+                tags=tags,
+                labels=labels,
+                pais=pais,
+                region=region,
+                label=label,
+            )
         except ValueError:
             continue
     return None

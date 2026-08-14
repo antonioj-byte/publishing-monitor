@@ -13,17 +13,16 @@ from telegram.ext import ContextTypes
 
 from bot.auth import is_authorized, unauthorized_message
 from bot.config import settings
+from bot.filters_info import list_available_filters
 from bot.reclassify_service import run_backfill_tags, run_reclassify_all
-from bot.report_parser import parse_command_args, parse_free_text, parse_tag_command_args
+from bot.report_parser import parse_command_args, parse_free_text
 from bot.restart_service import detect_restart_method, restart_bot, restart_method_hint
 from ai.classify import active_model, active_provider
 from bot.version import BOT_VERSION
 from db.models import ReportFilter
 from reports.generator import mark_articles_sent, record_informe, split_message
 from reports.pipeline import build_editorial_report
-from reports.paises import list_available_locations
 from reports.session import load_session
-from reports.tags import list_available_tags
 
 logger = logging.getLogger(__name__)
 
@@ -70,16 +69,14 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
         "Bot editorial activo.\n\n"
         "Comandos:\n"
         "/ping — comprobar latencia\n"
-        "/informe — informe desde el último cierre (o 24h)\n"
-        "/informe_hoy — publicados hoy en web (fecha de publicación)\n"
-        "/informe <días> <país|tag> — ej. /informe 7 alemania · /informe 7 ficcion\n"
-        "/tag <tag> <días> [<país>] — ej. /tag poesia 7 · /tag ferias_premios 14 españa\n"
+        "/informe — informe diario (desde último cierre)\n"
+        "/informe <filtros> — ej. /informe 7 ficcion · /informe alemania · /informe 14\n"
+        "/informe_hoy — publicados hoy en web\n"
         "/informe_mas — continuar el informe anterior\n"
-        "/paises — países y regiones\n"
-        "/tags — categorías editoriales\n"
-        "/reclasificar — reclasificar todos los artículos (tags + resúmenes)\n"
-        "/retag — solo artículos sin tags (más rápido si ya tienes resúmenes)\n"
-        "/reiniciar — reiniciar el bot (recarga .env y código)\n\n"
+        "/tags — tags editoriales y países disponibles\n"
+        "/reclasificar — reclasificar artículos sin tags\n"
+        "/reclasificar todo — reclasificar todos desde cero\n"
+        "/reiniciar — reiniciar el bot\n\n"
         "Los informes tienen un máximo de ~2.500 palabras.\n"
         "Si hay más contenido, usa /informe_mas.\n\n"
         "También en texto libre:\n"
@@ -121,56 +118,56 @@ def _classify_api_hint() -> str:
     )
 
 
-def _format_reclassify_result(stats: dict[str, int], *, mode: str) -> str:
-    if stats.get("queued", 0) == 0 and mode == "retag":
+def _format_reclassify_result(stats: dict[str, int], *, full_reset: bool) -> str:
+    if stats.get("queued", 0) == 0 and not full_reset:
         with_tags = stats.get("with_tags", 0)
         total = stats.get("total", 0)
         untagged = stats.get("untagged", 0)
         if untagged > 0:
             return (
                 f"Hay {untagged} artículos sin tags pero no se pudieron encolar.\n"
-                f"Con tags: {with_tags} de {total}.\n"
-                "Prueba /reclasificar."
+                f"Con tags: {with_tags} de {total}."
             )
         return (
             f"Todos los artículos tienen tags ({with_tags} de {total})."
         )
     if stats.get("with_tags", 0) == 0 and stats.get("classified", 0) == 0:
+        scope = "completa" if full_reset else "parcial"
         return (
-            f"{'Retag' if mode == 'retag' else 'Reclasificación'} abortada.\n"
+            f"Reclasificación {scope} abortada.\n"
             f"En cola: {stats.get('queued', stats.get('total', 0))}\n"
             f"Con tags: {stats.get('with_tags', 0)}\n"
             f"Fallidos: {stats.get('failed', 0)}\n\n"
             f"{_classify_api_hint()}"
-            f"y vuelve a ejecutar /{'retag' if mode == 'retag' else 'reclasificar'}."
+            "y vuelve a ejecutar /reclasificar."
         )
     if stats.get("with_tags", 0) == 0:
         return (
-            f"{'Retag' if mode == 'retag' else 'Reclasificación'} terminada sin tags.\n"
+            f"Reclasificación terminada sin tags.\n"
             f"En cola: {stats.get('queued', stats.get('total', 0))}\n"
             f"Con tags: {stats.get('with_tags', 0)}\n"
             f"Fallidos: {stats.get('failed', 0)}\n\n"
             "La API no asignó tags. Revisa créditos y vuelve a intentarlo."
         )
-    label = "Retag" if mode == "retag" else "Reclasificación"
+    label = "completa" if full_reset else "parcial"
     lines = [
-        f"{label} terminada.",
+        f"Reclasificación {label} terminada.",
         f"Con tags: {stats['with_tags']}",
         f"Procesados: {stats['classified']}",
         f"Fallidos: {stats['failed']}",
         f"Lotes: {stats['batches']}",
     ]
-    if mode == "retag":
-        lines.insert(1, f"En cola (sin tags): {stats.get('queued', 0)}")
-    else:
+    if full_reset:
         lines.insert(1, f"Total en BD: {stats.get('total', 0)}")
+    else:
+        lines.insert(1, f"En cola (sin tags): {stats.get('queued', 0)}")
     return "\n".join(lines)
 
 
 async def _run_reclassify_job(
     update: Update,
     *,
-    mode: str,
+    full_reset: bool,
     runner,
     start_message: str,
 ) -> None:
@@ -195,10 +192,10 @@ async def _run_reclassify_job(
         global _RECLASSIFY_RUNNING
         try:
             stats = await asyncio.to_thread(runner)
-            text = _format_reclassify_result(stats, mode=mode)
+            text = _format_reclassify_result(stats, full_reset=full_reset)
         except Exception as exc:
-            logger.exception("%s failed", mode)
-            text = f"Error en /{mode}: {exc}"
+            logger.exception("reclasificar failed")
+            text = f"Error en /reclasificar: {exc}"
         finally:
             _RECLASSIFY_RUNNING = False
         if update.message:
@@ -246,29 +243,35 @@ async def reiniciar_command(update: Update, context: ContextTypes.DEFAULT_TYPE) 
 
 
 async def reclasificar_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    await _run_reclassify_job(
-        update,
-        mode="reclasificar",
-        runner=lambda: run_reclassify_all(batch_size=20, delay=0.25, reset=True),
-        start_message=(
-            "Reclasificación iniciada (todos los artículos, con tags).\n"
-            "Puede tardar 1-2 horas. Te aviso cuando termine.\n"
-            "El bot sigue respondiendo a /ping mientras tanto."
-        ),
-    )
+    args = [a.lower() for a in (context.args or [])]
+    full_reset = args and args[0] in ("todo", "all", "todos")
+    if full_reset:
+        await _run_reclassify_job(
+            update,
+            full_reset=True,
+            runner=lambda: run_reclassify_all(batch_size=20, delay=0.25, reset=True),
+            start_message=(
+                "Reclasificación completa iniciada (todos los artículos).\n"
+                "Puede tardar 1-2 horas. Te aviso cuando termine.\n"
+                "El bot sigue respondiendo a /ping mientras tanto."
+            ),
+        )
+    else:
+        await _run_reclassify_job(
+            update,
+            full_reset=False,
+            runner=lambda: run_backfill_tags(batch_size=20, delay=0.25),
+            start_message=(
+                "Reclasificación iniciada (artículos sin tags).\n"
+                "Puede tardar 1-2 horas. Te aviso cuando termine.\n"
+                "El bot sigue respondiendo a /ping mientras tanto."
+            ),
+        )
 
 
 async def retag_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    await _run_reclassify_job(
-        update,
-        mode="retag",
-        runner=lambda: run_backfill_tags(batch_size=20, delay=0.25),
-        start_message=(
-            "Retag iniciado (solo artículos sin tags editoriales).\n"
-            "Puede tardar 1-2 horas. Te aviso cuando termine.\n"
-            "El bot sigue respondiendo a /ping mientras tanto."
-        ),
-    )
+    """Alias silencioso de /reclasificar (compatibilidad)."""
+    await reclasificar_command(update, context)
 
 
 async def unknown_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -287,7 +290,8 @@ async def unknown_command(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
     )
 
 
-async def paises_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+async def filtros_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Lista tags editoriales y países/regiones (comando informativo unificado)."""
     if not update.message:
         return
     if not is_authorized(update):
@@ -295,20 +299,21 @@ async def paises_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
             unauthorized_message(update.effective_chat.id if update.effective_chat else "?")
         )
         return
-    for chunk in split_message(list_available_locations()):
+    for chunk in split_message(list_available_filters()):
         await update.message.reply_text(chunk, disable_web_page_preview=True)
 
 
 async def tags_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    if not update.message:
-        return
-    if not is_authorized(update):
-        await update.message.reply_text(
-            unauthorized_message(update.effective_chat.id if update.effective_chat else "?")
-        )
-        return
-    for chunk in split_message(list_available_tags()):
-        await update.message.reply_text(chunk, disable_web_page_preview=True)
+    await filtros_command(update, context)
+
+
+async def paises_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    await filtros_command(update, context)
+
+
+async def tag_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Compatibilidad: /tag redirige a /informe."""
+    await informe_command(update, context)
 
 
 async def informe_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -325,18 +330,6 @@ async def informe_command(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
         await _send_report(update, mode="informe_pais", record=False, report_filter=report_filter)
     else:
         await _send_report(update, mode="informe", record=True)
-
-
-async def tag_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    args = context.args or []
-    try:
-        parsed = parse_tag_command_args(args)
-    except ValueError as exc:
-        if update.message:
-            await update.message.reply_text(str(exc))
-        return
-    report_filter = _filter_from_parsed(parsed)
-    await _send_report(update, mode="informe_pais", record=False, report_filter=report_filter)
 
 
 async def informe_hoy_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -393,7 +386,7 @@ async def _send_continuation(update: Update) -> None:
     if not session or session.cursor >= len(session.article_ids):
         await update.message.reply_text(
             "No hay un informe anterior pendiente de continuar.\n"
-            "Genera uno con /informe, /tag o /informe 7 alemania."
+            "Genera uno con /informe o /informe 7 ficcion."
         )
         return
 
