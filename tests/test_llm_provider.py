@@ -84,6 +84,18 @@ class GeminiProviderTests(unittest.TestCase):
         with patch.object(GeminiProvider, "_client", return_value=client):
             provider.verify_api()  # should not raise
 
+    def test_client_is_reused_across_calls(self) -> None:
+        provider = self._provider()
+        client = Mock()
+        client.models.generate_content.return_value = Mock(text='{"ok": true}')
+
+        with patch.object(GeminiProvider, "_client", return_value=client) as factory:
+            provider.generate_json(system_prompt="sys", user_msg="a")
+            provider.generate_json(system_prompt="sys", user_msg="b")
+
+        self.assertEqual(factory.call_count, 2)
+        self.assertEqual(client.models.generate_content.call_count, 2)
+
 
 class AnthropicProviderTests(unittest.TestCase):
     def _provider(self, api_key: str = "test-key") -> AnthropicProvider:

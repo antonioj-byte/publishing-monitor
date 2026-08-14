@@ -12,6 +12,9 @@ from typing import Protocol
 
 logger = logging.getLogger(__name__)
 
+_GEMINI_CLIENT = None
+_GEMINI_CLIENT_KEY: str | None = None
+
 
 class LLMAuthError(RuntimeError):
     """Invalid/missing API key or credentials rejected by the provider."""
@@ -59,9 +62,15 @@ class GeminiProvider:
         return self._model
 
     def _client(self):
+        global _GEMINI_CLIENT, _GEMINI_CLIENT_KEY
         from google import genai
 
-        return genai.Client(api_key=self._api_key)
+        if _GEMINI_CLIENT is not None and _GEMINI_CLIENT_KEY == self._api_key:
+            return _GEMINI_CLIENT
+
+        _GEMINI_CLIENT = genai.Client(api_key=self._api_key)
+        _GEMINI_CLIENT_KEY = self._api_key
+        return _GEMINI_CLIENT
 
     def _classify_error(self, exc: Exception) -> Exception | None:
         err = str(exc).lower()
@@ -78,10 +87,11 @@ class GeminiProvider:
     def generate_json(self, *, system_prompt: str, user_msg: str) -> str:
         from google.genai import types
 
+        client = self._client()
         last_error: Exception | None = None
         for model in (self._model, self._fallback_model):
             try:
-                response = self._client().models.generate_content(
+                response = client.models.generate_content(
                     model=model,
                     contents=user_msg,
                     config=types.GenerateContentConfig(
@@ -114,9 +124,10 @@ class GeminiProvider:
             )
 
         last_error: Exception | None = None
+        client = self._client()
         for model in (self._model, self._fallback_model):
             try:
-                self._client().models.generate_content(
+                client.models.generate_content(
                     model=model,
                     contents="Responde solo: ok",
                     config=types.GenerateContentConfig(max_output_tokens=10),
