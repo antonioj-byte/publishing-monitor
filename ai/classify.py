@@ -18,6 +18,8 @@ from medios_tiers import get_tier, tier_label
 
 logger = logging.getLogger(__name__)
 
+from reports.tags import validate_tags
+
 MODEL = "claude-sonnet-5"
 FALLBACK_MODEL = "claude-haiku-4-5"
 _API_AUTH_FAILED = False
@@ -34,8 +36,28 @@ Responde SOLO con JSON válido:
   "relevance_score": number,
   "en_alcance": boolean,
   "resumen_generado": string,
-  "titular_traducido": string
+  "titular_traducido": string,
+  "tags": string[]
 }
+
+Tags editoriales (obligatorio: 1-3 slugs de esta lista):
+- ficcion: Ficción (novelas, relatos, autoficción)
+- no_ficcion: No ficción (memorias, biografías, divulgación no ensayística)
+- literatura_traducida: Literatura traducida (obras extranjeras publicadas en el mercado local)
+- literatura_local: Literatura local (autores del país/mercado del medio)
+- ensayo_literario: Ensayo literario/filosófico
+- ensayo_politico: Ensayo político/actualidad con eje editorial o cultural
+- poesia: Poesía
+- lij: Infantil y juvenil (LIJ)
+- comic: Cómic y novela gráfica
+- mundo_editorial: Mundo editorial (fusiones, adquisiciones, cierres de sellos, cambios de dirección)
+- derechos_traducciones: Derechos y traducciones (ventas de derechos, subastas, adelantos)
+- ia_tecnologia: IA y tecnología editorial
+- librerias_distribucion: Librerías y distribución (aperturas, cierres, retail)
+- audiolibros_digital: Audiolibros y digital
+- ferias_premios: Ferias y premios (Frankfurt, Guadalajara, Booker, Nobel, Planeta, etc.)
+
+Elige el tag principal y hasta 2 secundarios si aplican. Usa solo slugs de la lista.
 
 Alcance editorial (en_alcance = true) — INCLUIR:
 - Libros, novelas, poesía, ensayo literario o cultural con eje en libros/lectura
@@ -89,7 +111,14 @@ class ClassificationResult:
     relevance_score: int
     resumen_generado: str
     titular_traducido: str | None
+    tags: list[str]
     en_alcance: bool = True
+
+
+def _parse_tags(raw: object) -> list[str]:
+    if not isinstance(raw, list):
+        return []
+    return validate_tags([str(t).strip() for t in raw if t])[:3]
 
 
 def _parse_response(text: str) -> ClassificationResult:
@@ -109,6 +138,7 @@ def _parse_response(text: str) -> ClassificationResult:
         relevance_score=score,
         resumen_generado=str(data["resumen_generado"]).strip(),
         titular_traducido=titular,
+        tags=_parse_tags(data.get("tags")),
         en_alcance=en_alcance,
     )
 
@@ -151,6 +181,7 @@ def classify_offline(
         relevance_score=score,
         resumen_generado=summary,
         titular_traducido=titular if idioma != "es" else None,
+        tags=[],
         en_alcance=in_scope,
     )
 
@@ -215,6 +246,7 @@ def classify_article(
                     relevance_score=min(result.relevance_score, 2),
                     resumen_generado=result.resumen_generado,
                     titular_traducido=result.titular_traducido,
+                    tags=result.tags,
                     en_alcance=False,
                 )
             return result
@@ -305,6 +337,7 @@ def classify_pending(
                         relevance_score = ?,
                         resumen_generado = ?,
                         titular_traducido = ?,
+                        tags = ?,
                         procesado = 1
                     WHERE id = ?
                     """,
@@ -313,6 +346,7 @@ def classify_pending(
                         result.relevance_score,
                         result.resumen_generado,
                         result.titular_traducido,
+                        json.dumps(result.tags),
                         row["id"],
                     ),
                 )

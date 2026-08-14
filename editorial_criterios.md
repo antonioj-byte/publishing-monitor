@@ -62,6 +62,16 @@ Incluir cuando aporten dato editorial nuevo o amplíen una tendencia detectada e
 - Titular y resumen **siempre en castellano** (español de España)
 - Tono informativo, claro, sin sensacionalismo
 
+## Tags editoriales (1-3 por artículo)
+
+Asigna slugs de la taxonomía fija al clasificar. Ejemplos:
+- Novela → `ficcion`
+- Venta de derechos de traducción → `derechos_traducciones`
+- Booker/Nobel/Frankfurt → `ferias_premios`
+- Fusión de editoriales → `mundo_editorial`
+
+Ver lista completa con `/tags` en Telegram.
+
 ## Escala relevance_score
 
 | Score | Significado |

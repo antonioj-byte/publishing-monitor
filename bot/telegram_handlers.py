@@ -11,12 +11,13 @@ from telegram import Update
 from telegram.ext import ContextTypes
 
 from bot.auth import is_authorized, unauthorized_message
-from bot.report_parser import parse_command_args, parse_free_text
+from bot.report_parser import parse_command_args, parse_free_text, parse_tag_command_args
 from db.models import ReportFilter
 from reports.generator import mark_articles_sent, record_informe, split_message
 from reports.pipeline import build_editorial_report
 from reports.paises import list_available_locations
 from reports.session import load_session
+from reports.tags import list_available_tags
 
 logger = logging.getLogger(__name__)
 
@@ -25,6 +26,30 @@ _MORE_TEXT = re.compile(
     r"mas\s+informaci[oó]n|continuar|sigue|siguiente)\s*$",
     re.IGNORECASE,
 )
+
+
+def _filter_from_parsed(parsed) -> ReportFilter:
+    return ReportFilter(
+        days=parsed.days,
+        pais=parsed.pais,
+        region=parsed.region,
+        location_label=parsed.location_label,
+        tags=parsed.tags or None,
+        tag_labels=parsed.tag_labels or None,
+    )
+
+
+def _filter_label(report_filter: ReportFilter | None) -> str:
+    if not report_filter:
+        return ""
+    parts: list[str] = []
+    if report_filter.location_label:
+        parts.append(report_filter.location_label)
+    if report_filter.tag_labels:
+        parts.append(", ".join(report_filter.tag_labels))
+    if report_filter.days:
+        parts.append(f"{report_filter.days} días")
+    return f" ({'; '.join(parts)})" if parts else ""
 
 
 async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -41,13 +66,15 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
         "/ping — comprobar latencia\n"
         "/informe — informe desde el último cierre (o 24h)\n"
         "/informe_hoy — solo lo recopilado hoy\n"
-        "/informe <días> <país> — ej. /informe 7 alemania\n"
+        "/informe <días> <país|tag> — ej. /informe 7 alemania · /informe 7 ficcion\n"
+        "/tag <tag> <días> [<país>] — ej. /tag poesia 7 · /tag ferias_premios 14 españa\n"
         "/informe_mas — continuar el informe anterior\n"
-        "/paises — países y regiones disponibles\n\n"
+        "/paises — países y regiones\n"
+        "/tags — categorías editoriales\n\n"
         "Los informes tienen un máximo de ~2.500 palabras.\n"
         "Si hay más contenido, usa /informe_mas.\n\n"
         "También en texto libre:\n"
-        "«informe últimos 7 días en alemania»"
+        "«informe últimos 7 días ficción en alemania»"
     )
 
 
@@ -78,6 +105,18 @@ async def paises_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
         await update.message.reply_text(chunk, disable_web_page_preview=True)
 
 
+async def tags_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    if not update.message:
+        return
+    if not is_authorized(update):
+        await update.message.reply_text(
+            unauthorized_message(update.effective_chat.id if update.effective_chat else "?")
+        )
+        return
+    for chunk in split_message(list_available_tags()):
+        await update.message.reply_text(chunk, disable_web_page_preview=True)
+
+
 async def informe_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     args = context.args or []
     try:
@@ -88,15 +127,22 @@ async def informe_command(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
         return
 
     if parsed:
-        report_filter = ReportFilter(
-            days=parsed.days,
-            pais=parsed.pais,
-            region=parsed.region,
-            location_label=parsed.location_label,
-        )
+        report_filter = _filter_from_parsed(parsed)
         await _send_report(update, mode="informe_pais", record=False, report_filter=report_filter)
     else:
         await _send_report(update, mode="informe", record=True)
+
+
+async def tag_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    args = context.args or []
+    try:
+        parsed = parse_tag_command_args(args)
+    except ValueError as exc:
+        if update.message:
+            await update.message.reply_text(str(exc))
+        return
+    report_filter = _filter_from_parsed(parsed)
+    await _send_report(update, mode="informe_pais", record=False, report_filter=report_filter)
 
 
 async def informe_hoy_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -127,12 +173,7 @@ async def free_text_report(update: Update, context: ContextTypes.DEFAULT_TYPE) -
     if not parsed:
         return
 
-    report_filter = ReportFilter(
-        days=parsed.days,
-        pais=parsed.pais,
-        region=parsed.region,
-        location_label=parsed.location_label,
-    )
+    report_filter = _filter_from_parsed(parsed)
     await _send_report(update, mode="informe_pais", record=False, report_filter=report_filter)
 
 
@@ -150,7 +191,7 @@ async def _send_continuation(update: Update) -> None:
     if not session or session.cursor >= len(session.article_ids):
         await update.message.reply_text(
             "No hay un informe anterior pendiente de continuar.\n"
-            "Genera uno con /informe o /informe 7 alemania."
+            "Genera uno con /informe, /tag o /informe 7 alemania."
         )
         return
 
@@ -195,10 +236,9 @@ async def _send_report(
         return
 
     chat_id = str(update.effective_chat.id)
-    label = ""
-    if report_filter and report_filter.location_label:
-        label = f" ({report_filter.location_label}, {report_filter.days} días)"
-    await update.message.reply_text(f"Clasificando y generando informe{label}…")
+    await update.message.reply_text(
+        f"Clasificando y generando informe{_filter_label(report_filter)}…"
+    )
 
     try:
         report = await asyncio.to_thread(

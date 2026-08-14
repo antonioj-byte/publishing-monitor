@@ -140,14 +140,15 @@ class ContinuationFetchTests(unittest.TestCase):
                     fecha_publicacion TEXT,
                     fecha_ingesta TEXT,
                     procesado INTEGER,
-                    enviado INTEGER
+                    enviado INTEGER,
+                    tags TEXT
                 );
                 INSERT INTO medios VALUES (1, 'Publishers Weekly', 'us', 'us', 1);
                 INSERT INTO articulos VALUES (
                     1, 1, 'Publishing merger', NULL, 'Editorial industry news',
                     'Editorial industry news', 'en', 'https://example.com/1',
                     'noticias', 4, '2026-08-13T10:00:00+00:00',
-                    '2026-08-13T10:00:00+00:00', 1, 1
+                    '2026-08-13T10:00:00+00:00', 1, 1, NULL
                 );
                 """
             )

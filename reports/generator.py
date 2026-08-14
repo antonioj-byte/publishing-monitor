@@ -21,6 +21,7 @@ from reports.prioritize import (
     limit_batch_for_prioritization,
     prioritize_articles,
 )
+from reports.tags import tag_labels as topical_tag_labels
 
 CATEGORY_HEADERS: dict[Categoria, str] = {
     "ideas": "📚 Ideas del mundo editorial",
@@ -187,7 +188,7 @@ def _fetch_articles(
     query = """
         SELECT a.id, a.titulo_original, a.titular_traducido, a.resumen_generado,
                a.resumen_raw, a.idioma, a.url, a.categoria, a.relevance_score,
-               a.fecha_publicacion, a.fecha_ingesta,
+               a.fecha_publicacion, a.fecha_ingesta, a.tags,
                m.region, m.pais, m.nombre AS medio_nombre, m.tier AS medio_tier
         FROM articulos a
         JOIN medios m ON m.id = a.medio_id
@@ -218,6 +219,16 @@ def _fetch_articles(
         elif report_filter.region:
             query += " AND m.region = ?"
             params.append(report_filter.region)
+        if report_filter.tags:
+            placeholders = ",".join("?" * len(report_filter.tags))
+            query += f"""
+              AND a.tags IS NOT NULL
+              AND EXISTS (
+                SELECT 1 FROM json_each(a.tags) je
+                WHERE je.value IN ({placeholders})
+              )
+            """
+            params.extend(report_filter.tags)
 
     # A continuation uses a persisted snapshot of IDs. Keep already-shown IDs
     # in that snapshot so its cursor still addresses the same ordered list.
@@ -389,7 +400,17 @@ def _format_entry(item: dict, *, show_tier: bool = False) -> str:
         tier_num = item.get("medio_tier") or 2
         tier_suffix = f" · {tier_label(tier_num)}"
     source = f" — _{medio}{tier_suffix}_" if medio else ""
-    return f"📰 {titular}{source}\n{resumen}\n🔗 {item['url']}"
+    tag_line = ""
+    raw_tags = item.get("tags")
+    if raw_tags:
+        try:
+            keys = json.loads(raw_tags) if isinstance(raw_tags, str) else raw_tags
+            labels = topical_tag_labels(keys)
+            if labels:
+                tag_line = f"\n🏷️ {', '.join(labels)}"
+        except (json.JSONDecodeError, TypeError):
+            pass
+    return f"📰 {titular}{source}\n{resumen}{tag_line}\n🔗 {item['url']}"
 
 
 def _format_trends_section(trends: list[dict], max_trends: int = 5) -> list[str]:
@@ -422,11 +443,23 @@ def _format_trends_section(trends: list[dict], max_trends: int = 5) -> list[str]
 
 def _header_lines(mode: str, report_filter: ReportFilter | None, now: datetime) -> list[str]:
     date_str = now.strftime("%d/%m/%Y")
+    tag_part = ""
+    if report_filter and report_filter.tag_labels:
+        tag_part = ", ".join(report_filter.tag_labels)
+
     if mode == "informe_pais" and report_filter:
-        lines = [
-            f"📋 Informe — {report_filter.location_label} "
-            f"(últimos {report_filter.days} días) — {date_str}"
-        ]
+        if report_filter.location_label:
+            title = (
+                f"📋 Informe — {report_filter.location_label} "
+                f"(últimos {report_filter.days} días)"
+            )
+        elif tag_part:
+            title = f"📋 Informe — {tag_part} (últimos {report_filter.days} días)"
+        else:
+            title = f"📋 Informe (últimos {report_filter.days} días)"
+        if tag_part and report_filter.location_label:
+            title += f" · {tag_part}"
+        lines = [f"{title} — {date_str}"]
     elif mode == "informe_hoy":
         lines = [f"📋 Informe de hoy — {date_str}"]
     elif mode == "informe_mas":

@@ -25,6 +25,8 @@ from bot.telegram_handlers import (
     paises_command,
     ping_command,
     start_command,
+    tag_command,
+    tags_command,
 )
 from db.connection import init_schema
 from ingest.runner import ingest_all
@@ -202,6 +204,8 @@ def build_application() -> Application:
     app.add_handler(CommandHandler("informe_hoy", informe_hoy_command))
     app.add_handler(CommandHandler("informe_mas", informe_mas_command))
     app.add_handler(CommandHandler("paises", paises_command))
+    app.add_handler(CommandHandler("tags", tags_command))
+    app.add_handler(CommandHandler("tag", tag_command))
     app.add_handler(
         MessageHandler(
             filters.TEXT & ~filters.COMMAND,
