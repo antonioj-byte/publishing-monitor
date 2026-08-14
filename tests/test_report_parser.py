@@ -21,6 +21,12 @@ class ReportParserTagTests(unittest.TestCase):
         self.assertEqual(parsed.tags, ["ficcion"])
         self.assertIsNone(parsed.pais)
 
+    def test_informe_tag_slug_with_underscore(self) -> None:
+        parsed = parse_command_args(["7", "literatura_local"])
+        assert parsed is not None
+        self.assertEqual(parsed.tags, ["literatura_local"])
+        self.assertIsNone(parsed.pais)
+
     def test_informe_country_and_tag(self) -> None:
         parsed = parse_command_args(["7", "alemania", "poesia"])
         assert parsed is not None

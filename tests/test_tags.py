@@ -13,6 +13,15 @@ class TagResolutionTests(unittest.TestCase):
         self.assertEqual(key, "ficcion")
         self.assertEqual(label, "Ficción")
 
+    def test_extract_slug_with_underscore(self) -> None:
+        keys, remainder = extract_tags_from_text("literatura_local")
+        self.assertEqual(keys, ["literatura_local"])
+        self.assertEqual(remainder, "")
+
+    def test_extract_no_ficcion_slug(self) -> None:
+        keys, _ = extract_tags_from_text("no_ficcion")
+        self.assertEqual(keys, ["no_ficcion"])
+
     def test_extract_multiword_tag(self) -> None:
         keys, remainder = extract_tags_from_text("ferias y premios en alemania")
         self.assertIn("ferias_premios", keys)
