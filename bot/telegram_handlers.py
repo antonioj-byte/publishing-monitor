@@ -14,6 +14,7 @@ from telegram.ext import ContextTypes
 from bot.auth import is_authorized, unauthorized_message
 from bot.reclassify_service import run_reclassify_all
 from bot.report_parser import parse_command_args, parse_free_text, parse_tag_command_args
+from bot.restart_service import detect_restart_method, restart_bot, restart_method_hint
 from bot.version import BOT_VERSION
 from db.models import ReportFilter
 from reports.generator import mark_articles_sent, record_informe, split_message
@@ -74,7 +75,8 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
         "/informe_mas — continuar el informe anterior\n"
         "/paises — países y regiones\n"
         "/tags — categorías editoriales\n"
-        "/reclasificar — reclasificar todos los artículos (tags + resúmenes)\n\n"
+        "/reclasificar — reclasificar todos los artículos (tags + resúmenes)\n"
+        "/reiniciar — reiniciar el bot (recarga .env y código)\n\n"
         "Los informes tienen un máximo de ~2.500 palabras.\n"
         "Si hay más contenido, usa /informe_mas.\n\n"
         "También en texto libre:\n"
@@ -98,6 +100,45 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
 
 
 _RECLASSIFY_RUNNING = False
+_RESTART_RUNNING = False
+
+
+async def reiniciar_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    global _RESTART_RUNNING
+    if not update.message:
+        return
+    if not is_authorized(update):
+        await update.message.reply_text(
+            unauthorized_message(update.effective_chat.id if update.effective_chat else "?")
+        )
+        return
+    if _RESTART_RUNNING:
+        await update.message.reply_text("Ya hay un reinicio en curso.")
+        return
+
+    method = detect_restart_method()
+    await update.message.reply_text(
+        "Reiniciando bot…\n"
+        f"Método: {restart_method_hint(method)}.\n"
+        "En ~10 s prueba /ping."
+    )
+
+    _RESTART_RUNNING = True
+
+    async def _job() -> None:
+        global _RESTART_RUNNING
+        try:
+            await restart_bot(context.application, delay_seconds=2.0)
+        except Exception:
+            logger.exception("Restart failed")
+            _RESTART_RUNNING = False
+            if update.message:
+                await update.message.reply_text(
+                    "No pude reiniciar automáticamente. "
+                    "Arranca el bot manualmente con ./deploy/start-bot.sh"
+                )
+
+    asyncio.create_task(_job())
 
 
 async def reclasificar_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
