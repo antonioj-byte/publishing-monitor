@@ -10,7 +10,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 import feedparser
 
-from ai.classify import MODEL
+from ai.classify import active_model, active_provider, verify_classify_api
 from bot.config import settings, PROJECT_ROOT
 from db.connection import get_connection, init_schema
 from reports.generator import build_report, split_message
@@ -29,23 +29,19 @@ def main() -> None:
     results.append(check(".env existe", (PROJECT_ROOT / ".env").exists()))
     results.append(check("TELEGRAM_BOT_TOKEN", bool(settings.telegram_bot_token.strip())))
     results.append(check("TELEGRAM_CHAT_ID", bool(settings.telegram_chat_id.strip())))
-    has_anthropic = bool(settings.anthropic_api_key.strip())
-    results.append(check("ANTHROPIC_API_KEY presente", has_anthropic))
+    provider = active_provider()
+    results.append(check("CLASSIFY_PROVIDER", provider in ("gemini", "anthropic"), provider))
 
-    if has_anthropic:
+    if settings.has_classify_api():
         try:
-            import anthropic
-            client = anthropic.Anthropic(api_key=settings.anthropic_api_key)
-            client.messages.create(
-                model=MODEL,
-                max_tokens=20,
-                messages=[{"role": "user", "content": "Responde solo: ok"}],
-            )
-            results.append(check("ANTHROPIC_API_KEY válida", True))
+            verify_classify_api()
+            model = active_model()
+            results.append(check(f"API clasificación ({provider})", True, model))
         except Exception as exc:
-            err = str(exc)
-            hint = " — renueva la clave en console.anthropic.com" if "401" in err else ""
-            results.append(check("ANTHROPIC_API_KEY válida", False, err[:80] + hint))
+            results.append(check(f"API clasificación ({provider})", False, str(exc)[:80]))
+    else:
+        key_name = "GOOGLE_API_KEY" if provider == "gemini" else "ANTHROPIC_API_KEY"
+        results.append(check(f"{key_name} presente", False, "clasificación offline"))
 
     if settings.telegram_bot_token.strip():
         try:

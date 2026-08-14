@@ -12,6 +12,10 @@ load_dotenv(ENV_PATH)
 @dataclass(frozen=True)
 class Settings:
     anthropic_api_key: str
+    google_api_key: str
+    classify_provider: str
+    gemini_model: str
+    gemini_fallback_model: str
     telegram_bot_token: str
     telegram_chat_id: str
     database_path: str
@@ -46,10 +50,24 @@ class Settings:
     prioritize_embedding_model: str
     prioritize_embedding_prefix: str
 
+    def has_classify_api(self) -> bool:
+        if self.classify_provider == "gemini":
+            return bool(self.google_api_key.strip())
+        return bool(self.anthropic_api_key.strip())
+
     @classmethod
     def from_env(cls) -> "Settings":
+        google_api_key = os.getenv("GOOGLE_API_KEY", "")
+        anthropic_api_key = os.getenv("ANTHROPIC_API_KEY", "")
+        provider = os.getenv("CLASSIFY_PROVIDER", "").strip().lower()
+        if provider not in ("gemini", "anthropic"):
+            provider = "gemini" if google_api_key.strip() else "anthropic"
         return cls(
-            anthropic_api_key=os.getenv("ANTHROPIC_API_KEY", ""),
+            anthropic_api_key=anthropic_api_key,
+            google_api_key=google_api_key,
+            classify_provider=provider,
+            gemini_model=os.getenv("GEMINI_MODEL", "gemini-2.5-flash"),
+            gemini_fallback_model=os.getenv("GEMINI_FALLBACK_MODEL", "gemini-2.5-flash-lite"),
             telegram_bot_token=os.getenv("TELEGRAM_BOT_TOKEN", ""),
             telegram_chat_id=os.getenv("TELEGRAM_CHAT_ID", ""),
             database_path=os.getenv("DATABASE_PATH", "./data/editorial.db"),

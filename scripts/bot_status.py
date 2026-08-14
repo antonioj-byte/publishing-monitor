@@ -12,6 +12,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
+from ai.classify import active_model, active_provider, verify_classify_api
 from bot.config import settings
 from bot.heartbeat import HEARTBEAT_PATH, read_heartbeat
 
@@ -76,27 +77,25 @@ def main() -> None:
     else:
         print("Token Telegram: NO configurado")
 
-    api_key = settings.anthropic_api_key.strip()
-    if api_key:
-        try:
-            import anthropic
-            from ai.classify import MODEL
+    provider = active_provider()
+    print(f"Clasificación: {provider} ({active_model()})")
 
-            client = anthropic.Anthropic(api_key=api_key)
-            client.messages.create(
-                model=MODEL,
-                max_tokens=10,
-                messages=[{"role": "user", "content": "ok"}],
-            )
-            print("ANTHROPIC_API_KEY: OK (traducción y resúmenes en castellano)")
+    if settings.has_classify_api():
+        try:
+            verify_classify_api()
+            key_label = "GOOGLE_API_KEY" if provider == "gemini" else "ANTHROPIC_API_KEY"
+            print(f"{key_label}: OK (traducción y resúmenes en castellano)")
         except Exception as exc:
             err = str(exc)
-            if "401" in err:
+            if provider == "gemini":
+                print(f"GOOGLE_API_KEY: error ({err[:80]})")
+            elif "401" in err:
                 print("ANTHROPIC_API_KEY: INVÁLIDA — renueva en console.anthropic.com")
             else:
                 print(f"ANTHROPIC_API_KEY: error ({err[:60]})")
     else:
-        print("ANTHROPIC_API_KEY: NO configurada — resúmenes sin traducir")
+        key_name = "GOOGLE_API_KEY" if provider == "gemini" else "ANTHROPIC_API_KEY"
+        print(f"{key_name}: NO configurada — resúmenes sin traducir")
 
     hb = read_heartbeat()
     if hb:

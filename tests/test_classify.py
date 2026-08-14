@@ -18,13 +18,31 @@ from bot.config import settings
 from db.models import ReportFilter
 
 
+def _anthropic_settings(**kwargs: object):
+    base = replace(
+        settings,
+        classify_provider="anthropic",
+        anthropic_api_key="test-key",
+        google_api_key="",
+    )
+    return replace(base, **kwargs)
+
+
+def _gemini_settings(**kwargs: object):
+    base = replace(
+        settings,
+        classify_provider="gemini",
+        google_api_key="test-google-key",
+        anthropic_api_key="",
+    )
+    return replace(base, **kwargs)
+
+
 class ClassificationFallbackTests(unittest.TestCase):
     def tearDown(self) -> None:
         classify._API_AUTH_FAILED = False
 
-    def test_invalid_api_key_falls_back_offline_for_current_and_later_articles(
-        self,
-    ) -> None:
+    def test_invalid_anthropic_key_falls_back_offline(self) -> None:
         request = httpx.Request("POST", "https://api.anthropic.com/v1/messages")
         response = httpx.Response(401, request=request)
         auth_error = anthropic.AuthenticationError(
@@ -34,7 +52,7 @@ class ClassificationFallbackTests(unittest.TestCase):
         )
         client = Mock()
         client.messages.create.side_effect = auth_error
-        api_settings = replace(settings, anthropic_api_key="invalid")
+        api_settings = _anthropic_settings(anthropic_api_key="invalid")
 
         with (
             patch("ai.classify.settings", api_settings),
@@ -62,7 +80,7 @@ class ClassificationFallbackTests(unittest.TestCase):
 
     def test_invalid_api_key_raises_when_offline_disabled(self) -> None:
         classify._API_AUTH_FAILED = True
-        api_settings = replace(settings, anthropic_api_key="invalid")
+        api_settings = _anthropic_settings(anthropic_api_key="invalid")
 
         with patch("ai.classify.settings", api_settings):
             with self.assertRaises(RuntimeError):
@@ -75,11 +93,69 @@ class ClassificationFallbackTests(unittest.TestCase):
                     allow_offline=False,
                 )
 
-    def test_verify_anthropic_api_rejects_missing_key(self) -> None:
-        offline_settings = replace(settings, anthropic_api_key="")
+    def test_verify_classify_api_rejects_missing_anthropic_key(self) -> None:
+        offline_settings = _anthropic_settings(anthropic_api_key="")
         with patch("ai.classify.settings", offline_settings):
             with self.assertRaises(RuntimeError):
-                classify.verify_anthropic_api()
+                classify.verify_classify_api()
+
+    def test_verify_classify_api_rejects_missing_gemini_key(self) -> None:
+        offline_settings = _gemini_settings(google_api_key="")
+        with patch("ai.classify.settings", offline_settings):
+            with self.assertRaises(RuntimeError):
+                classify.verify_classify_api()
+
+    def test_gemini_classify_uses_json_response(self) -> None:
+        gemini_json = (
+            '{"categoria":"noticias","relevance_score":4,"en_alcance":true,'
+            '"resumen_generado":"Una editorial anuncia novedades.","titular_traducido":'
+            '"Novedades editoriales","tags":["mundo_editorial"]}'
+        )
+        api_settings = _gemini_settings()
+
+        with (
+            patch("ai.classify.settings", api_settings),
+            patch("ai.classify.generate_json", return_value=gemini_json) as generate,
+        ):
+            result = classify.classify_article(
+                titulo="Publisher news",
+                resumen="A publisher announces books.",
+                medio="Publishers Weekly",
+                categoria_default="noticias",
+                idioma="en",
+            )
+
+        generate.assert_called_once()
+        self.assertEqual(result.categoria, "noticias")
+        self.assertEqual(result.tags, ["mundo_editorial"])
+        self.assertIn("editorial", result.resumen_generado.lower())
+
+    def test_gemini_auth_failure_falls_back_offline(self) -> None:
+        api_settings = _gemini_settings()
+
+        with (
+            patch("ai.classify.settings", api_settings),
+            patch(
+                "ai.classify.generate_json",
+                side_effect=RuntimeError("401 api key invalid"),
+            ),
+        ):
+            result = classify.classify_article(
+                titulo="Publisher news",
+                resumen="A publisher announces books.",
+                medio="Publishers Weekly",
+                categoria_default="noticias",
+                idioma="en",
+            )
+
+        self.assertTrue(classify._API_AUTH_FAILED)
+        self.assertIn("GOOGLE_API_KEY", result.resumen_generado)
+
+    def test_active_provider_defaults_to_gemini_when_google_key_set(self) -> None:
+        api_settings = _gemini_settings()
+        with patch("ai.classify.settings", api_settings):
+            self.assertEqual(classify.active_provider(), "gemini")
+            self.assertEqual(classify.active_model(), "gemini-2.5-flash")
 
     def test_pending_classification_can_be_scoped_to_country_window(self) -> None:
         with TemporaryDirectory() as temp_dir:
@@ -134,7 +210,7 @@ class ClassificationFallbackTests(unittest.TestCase):
                 finally:
                     test_conn.close()
 
-            offline_settings = replace(settings, anthropic_api_key="")
+            offline_settings = _anthropic_settings(anthropic_api_key="")
             with (
                 patch("ai.classify.get_connection", test_connection),
                 patch("ai.classify.settings", offline_settings),

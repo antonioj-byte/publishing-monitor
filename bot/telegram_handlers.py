@@ -12,9 +12,11 @@ from telegram.constants import ParseMode
 from telegram.ext import ContextTypes
 
 from bot.auth import is_authorized, unauthorized_message
+from bot.config import settings
 from bot.reclassify_service import run_backfill_tags, run_reclassify_all
 from bot.report_parser import parse_command_args, parse_free_text, parse_tag_command_args
 from bot.restart_service import detect_restart_method, restart_bot, restart_method_hint
+from ai.classify import active_model, active_provider
 from bot.version import BOT_VERSION
 from db.models import ReportFilter
 from reports.generator import mark_articles_sent, record_informe, split_message
@@ -93,7 +95,10 @@ async def ping_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
             unauthorized_message(update.effective_chat.id if update.effective_chat else "?")
         )
         return
-    await update.message.reply_text(f"pong — bot operativo (v{BOT_VERSION})")
+    await update.message.reply_text(
+        f"pong — bot operativo (v{BOT_VERSION})\n"
+        f"Clasificación: {active_provider()} ({active_model()})"
+    )
 
 
 async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -102,6 +107,18 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
 
 _RECLASSIFY_RUNNING = False
 _RESTART_RUNNING = False
+
+
+def _classify_api_hint() -> str:
+    if settings.classify_provider == "gemini":
+        return (
+            "Revisa GOOGLE_API_KEY en Railway "
+            "(https://aistudio.google.com/apikey) "
+        )
+    return (
+        "Revisa ANTHROPIC_API_KEY y créditos en Railway "
+        "(console.anthropic.com → Plans & Billing) "
+    )
 
 
 def _format_reclassify_result(stats: dict[str, int], *, mode: str) -> str:
@@ -124,8 +141,7 @@ def _format_reclassify_result(stats: dict[str, int], *, mode: str) -> str:
             f"En cola: {stats.get('queued', stats.get('total', 0))}\n"
             f"Con tags: {stats.get('with_tags', 0)}\n"
             f"Fallidos: {stats.get('failed', 0)}\n\n"
-            "Revisa ANTHROPIC_API_KEY y créditos en Railway "
-            "(console.anthropic.com → Plans & Billing) "
+            f"{_classify_api_hint()}"
             f"y vuelve a ejecutar /{'retag' if mode == 'retag' else 'reclasificar'}."
         )
     if stats.get("with_tags", 0) == 0:

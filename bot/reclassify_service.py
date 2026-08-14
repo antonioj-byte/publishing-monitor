@@ -5,7 +5,7 @@ from __future__ import annotations
 import logging
 import time
 
-from ai.classify import classify_pending, verify_anthropic_api
+from ai.classify import classify_pending, verify_classify_api
 from bot.config import settings
 from db.connection import get_connection, init_schema
 
@@ -98,7 +98,7 @@ def _run_classify_batches(
         if stats["remaining"] == 0 or stats["classified"] == 0:
             break
 
-        if settings.anthropic_api_key and delay > 0:
+        if settings.has_classify_api() and delay > 0:
             time.sleep(delay)
 
     return {
@@ -118,7 +118,7 @@ def run_reclassify_all(
 ) -> dict[str, int]:
     """Reclassify all articles; returns totals."""
     init_schema()
-    verify_anthropic_api()
+    verify_classify_api()
 
     with get_connection() as conn:
         total = conn.execute("SELECT COUNT(*) FROM articulos").fetchone()[0]
@@ -152,7 +152,7 @@ def run_backfill_tags(
 ) -> dict[str, int]:
     """Reclassify only articles missing editorial tags."""
     init_schema()
-    verify_anthropic_api()
+    verify_classify_api()
 
     with get_connection() as conn:
         total = conn.execute("SELECT COUNT(*) FROM articulos").fetchone()[0]
