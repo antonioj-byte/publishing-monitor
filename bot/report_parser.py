@@ -137,6 +137,10 @@ def parse_tag_command_args(args: list[str]) -> ParsedReportRequest:
 
 _FREE_TEXT_PATTERNS = [
     re.compile(
+        r"informe\s+(.+?)\s+(\d+)\s+d[ií]as?\s*$",
+        re.IGNORECASE,
+    ),
+    re.compile(
         r"(?:informe\s+)?(?:ultimos|últimos)\s+(\d+)\s+d[ií]as?\s+(?:en|de)?\s*(.+)",
         re.IGNORECASE,
     ),
@@ -160,8 +164,12 @@ def parse_free_text(text: str) -> ParsedReportRequest | None:
         match = pattern.search(text)
         if not match:
             continue
-        days = int(match.group(1))
-        blob = match.group(2).strip().rstrip("?.!")
+        if pattern.pattern.startswith("informe\\s+(.+?)\\s+(\\d+)"):
+            blob = match.group(1).strip().rstrip("?.!")
+            days = int(match.group(2))
+        else:
+            days = int(match.group(1))
+            blob = match.group(2).strip().rstrip("?.!")
         try:
             return _build_request(days, blob)
         except ValueError:
