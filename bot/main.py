@@ -28,6 +28,7 @@ from bot.telegram_handlers import (
     ping_command,
     reclasificar_command,
     reiniciar_command,
+    retag_command,
     start_command,
     tag_command,
     tags_command,
@@ -222,6 +223,7 @@ def build_application() -> Application:
     app.add_handler(CommandHandler("tags", tags_command))
     app.add_handler(CommandHandler("tag", tag_command))
     app.add_handler(CommandHandler("reclasificar", reclasificar_command))
+    app.add_handler(CommandHandler("retag", retag_command))
     app.add_handler(CommandHandler("reiniciar", reiniciar_command))
     app.add_handler(MessageHandler(filters.COMMAND, unknown_command))
     app.add_handler(
@@ -253,7 +255,8 @@ async def main_async() -> None:
                 BotCommand("tags", "Categorías editoriales"),
                 BotCommand("tag", "Informe por tag: /tag ficcion 7"),
                 BotCommand("paises", "Países y regiones"),
-                BotCommand("reclasificar", "Reclasificar artículos con tags"),
+                BotCommand("reclasificar", "Reclasificar todos con tags"),
+                BotCommand("retag", "Tags solo en artículos sin ellos"),
                 BotCommand("reiniciar", "Reiniciar el bot"),
             ]
         )

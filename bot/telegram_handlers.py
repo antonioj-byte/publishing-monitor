@@ -12,7 +12,7 @@ from telegram.constants import ParseMode
 from telegram.ext import ContextTypes
 
 from bot.auth import is_authorized, unauthorized_message
-from bot.reclassify_service import run_reclassify_all
+from bot.reclassify_service import run_backfill_tags, run_reclassify_all
 from bot.report_parser import parse_command_args, parse_free_text, parse_tag_command_args
 from bot.restart_service import detect_restart_method, restart_bot, restart_method_hint
 from bot.version import BOT_VERSION
@@ -76,6 +76,7 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
         "/paises — países y regiones\n"
         "/tags — categorías editoriales\n"
         "/reclasificar — reclasificar todos los artículos (tags + resúmenes)\n"
+        "/retag — solo artículos sin tags (más rápido si ya tienes resúmenes)\n"
         "/reiniciar — reiniciar el bot (recarga .env y código)\n\n"
         "Los informes tienen un máximo de ~2.500 palabras.\n"
         "Si hay más contenido, usa /informe_mas.\n\n"
@@ -101,6 +102,84 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
 
 _RECLASSIFY_RUNNING = False
 _RESTART_RUNNING = False
+
+
+def _format_reclassify_result(stats: dict[str, int], *, mode: str) -> str:
+    if stats.get("queued", stats.get("total", 0)) == 0 and mode == "retag":
+        return (
+            f"Todos los artículos ya tienen tags ({stats.get('with_tags', 0)} en total)."
+        )
+    if stats.get("with_tags", 0) == 0 and stats.get("classified", 0) == 0:
+        return (
+            f"{'Retag' if mode == 'retag' else 'Reclasificación'} abortada.\n"
+            f"En cola: {stats.get('queued', stats.get('total', 0))}\n"
+            f"Con tags: {stats.get('with_tags', 0)}\n"
+            f"Fallidos: {stats.get('failed', 0)}\n\n"
+            "Revisa ANTHROPIC_API_KEY y créditos en Railway "
+            "(console.anthropic.com → Plans & Billing) "
+            f"y vuelve a ejecutar /{'retag' if mode == 'retag' else 'reclasificar'}."
+        )
+    if stats.get("with_tags", 0) == 0:
+        return (
+            f"{'Retag' if mode == 'retag' else 'Reclasificación'} terminada sin tags.\n"
+            f"En cola: {stats.get('queued', stats.get('total', 0))}\n"
+            f"Con tags: {stats.get('with_tags', 0)}\n"
+            f"Fallidos: {stats.get('failed', 0)}\n\n"
+            "La API no asignó tags. Revisa créditos y vuelve a intentarlo."
+        )
+    label = "Retag" if mode == "retag" else "Reclasificación"
+    lines = [
+        f"{label} terminada.",
+        f"Con tags: {stats['with_tags']}",
+        f"Procesados: {stats['classified']}",
+        f"Fallidos: {stats['failed']}",
+        f"Lotes: {stats['batches']}",
+    ]
+    if mode == "retag":
+        lines.insert(1, f"En cola (sin tags): {stats.get('queued', 0)}")
+    else:
+        lines.insert(1, f"Total en BD: {stats.get('total', 0)}")
+    return "\n".join(lines)
+
+
+async def _run_reclassify_job(
+    update: Update,
+    *,
+    mode: str,
+    runner,
+    start_message: str,
+) -> None:
+    global _RECLASSIFY_RUNNING
+    if not update.message:
+        return
+    if not is_authorized(update):
+        await update.message.reply_text(
+            unauthorized_message(update.effective_chat.id if update.effective_chat else "?")
+        )
+        return
+    if _RECLASSIFY_RUNNING:
+        await update.message.reply_text(
+            "Ya hay una reclasificación en curso. Espera a que termine."
+        )
+        return
+
+    await update.message.reply_text(start_message)
+    _RECLASSIFY_RUNNING = True
+
+    async def _job() -> None:
+        global _RECLASSIFY_RUNNING
+        try:
+            stats = await asyncio.to_thread(runner)
+            text = _format_reclassify_result(stats, mode=mode)
+        except Exception as exc:
+            logger.exception("%s failed", mode)
+            text = f"Error en /{mode}: {exc}"
+        finally:
+            _RECLASSIFY_RUNNING = False
+        if update.message:
+            await update.message.reply_text(text)
+
+    asyncio.create_task(_job())
 
 
 async def reiniciar_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -142,65 +221,29 @@ async def reiniciar_command(update: Update, context: ContextTypes.DEFAULT_TYPE) 
 
 
 async def reclasificar_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    global _RECLASSIFY_RUNNING
-    if not update.message:
-        return
-    if not is_authorized(update):
-        await update.message.reply_text(
-            unauthorized_message(update.effective_chat.id if update.effective_chat else "?")
-        )
-        return
-    if _RECLASSIFY_RUNNING:
-        await update.message.reply_text(
-            "Ya hay una reclasificación en curso. Espera a que termine."
-        )
-        return
-
-    await update.message.reply_text(
-        "Reclasificación iniciada (todos los artículos, con tags).\n"
-        "Puede tardar 1-2 horas. Te aviso cuando termine.\n"
-        "El bot sigue respondiendo a /ping mientras tanto."
+    await _run_reclassify_job(
+        update,
+        mode="reclasificar",
+        runner=lambda: run_reclassify_all(batch_size=20, delay=0.25, reset=True),
+        start_message=(
+            "Reclasificación iniciada (todos los artículos, con tags).\n"
+            "Puede tardar 1-2 horas. Te aviso cuando termine.\n"
+            "El bot sigue respondiendo a /ping mientras tanto."
+        ),
     )
 
-    _RECLASSIFY_RUNNING = True
 
-    async def _job() -> None:
-        global _RECLASSIFY_RUNNING
-        try:
-            stats = await asyncio.to_thread(
-                run_reclassify_all,
-                batch_size=20,
-                delay=0.25,
-                reset=True,
-            )
-            if stats["with_tags"] == 0:
-                text = (
-                    "Reclasificación abortada o sin tags.\n"
-                    f"Total en BD: {stats['total']}\n"
-                    f"Con tags: {stats['with_tags']}\n"
-                    f"Fallidos: {stats['failed']}\n\n"
-                    "Revisa créditos de Anthropic en Railway "
-                    "(console.anthropic.com → Plans & Billing) "
-                    "y vuelve a ejecutar /reclasificar."
-                )
-            else:
-                text = (
-                    f"Reclasificación terminada.\n"
-                    f"Total: {stats['total']}\n"
-                    f"Con tags: {stats['with_tags']}\n"
-                    f"Clasificados: {stats['classified']}\n"
-                    f"Fallidos: {stats['failed']}\n"
-                    f"Lotes: {stats['batches']}"
-                )
-        except Exception as exc:
-            logger.exception("Reclassification failed")
-            text = f"Error en reclasificación: {exc}"
-        finally:
-            _RECLASSIFY_RUNNING = False
-        if update.message:
-            await update.message.reply_text(text)
-
-    asyncio.create_task(_job())
+async def retag_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    await _run_reclassify_job(
+        update,
+        mode="retag",
+        runner=lambda: run_backfill_tags(batch_size=20, delay=0.25),
+        start_message=(
+            "Retag iniciado (solo artículos sin tags editoriales).\n"
+            "Puede tardar 1-2 horas. Te aviso cuando termine.\n"
+            "El bot sigue respondiendo a /ping mientras tanto."
+        ),
+    )
 
 
 async def unknown_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
