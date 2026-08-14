@@ -10,10 +10,8 @@ from pathlib import Path
 from tempfile import TemporaryDirectory
 from unittest.mock import Mock, patch
 
-import anthropic
-import httpx
-
 import ai.classify as classify
+from ai.llm_provider import LLMAuthError, LLMQuotaError
 from bot.config import settings
 from db.models import ReportFilter
 
@@ -43,20 +41,14 @@ class ClassificationFallbackTests(unittest.TestCase):
         classify._API_AUTH_FAILED = False
 
     def test_invalid_anthropic_key_falls_back_offline(self) -> None:
-        request = httpx.Request("POST", "https://api.anthropic.com/v1/messages")
-        response = httpx.Response(401, request=request)
-        auth_error = anthropic.AuthenticationError(
-            "invalid key",
-            response=response,
-            body=None,
-        )
-        client = Mock()
-        client.messages.create.side_effect = auth_error
         api_settings = _anthropic_settings(anthropic_api_key="invalid")
+        provider = Mock()
+        provider.name = "anthropic"
+        provider.generate_json.side_effect = LLMAuthError("invalid key")
 
         with (
             patch("ai.classify.settings", api_settings),
-            patch("ai.classify.anthropic.Anthropic", return_value=client) as factory,
+            patch("ai.classify.get_provider", return_value=provider) as factory,
         ):
             first = classify.classify_article(
                 titulo="New publishing merger",
@@ -75,8 +67,9 @@ class ClassificationFallbackTests(unittest.TestCase):
 
         self.assertTrue(first.en_alcance)
         self.assertTrue(second.en_alcance)
-        self.assertEqual(factory.call_count, 1)
+        self.assertEqual(provider.generate_json.call_count, 1)
         self.assertTrue(classify._API_AUTH_FAILED)
+        factory.assert_called()
 
     def test_invalid_api_key_raises_when_offline_disabled(self) -> None:
         classify._API_AUTH_FAILED = True
@@ -112,10 +105,13 @@ class ClassificationFallbackTests(unittest.TestCase):
             '"Novedades editoriales","tags":["mundo_editorial"]}'
         )
         api_settings = _gemini_settings()
+        provider = Mock()
+        provider.name = "gemini"
+        provider.generate_json.return_value = gemini_json
 
         with (
             patch("ai.classify.settings", api_settings),
-            patch("ai.classify.generate_json", return_value=gemini_json) as generate,
+            patch("ai.classify.get_provider", return_value=provider) as factory,
         ):
             result = classify.classify_article(
                 titulo="Publisher news",
@@ -125,20 +121,22 @@ class ClassificationFallbackTests(unittest.TestCase):
                 idioma="en",
             )
 
-        generate.assert_called_once()
+        provider.generate_json.assert_called_once()
+        factory.assert_called()
         self.assertEqual(result.categoria, "noticias")
         self.assertEqual(result.tags, ["mundo_editorial"])
         self.assertIn("editorial", result.resumen_generado.lower())
 
-    def test_gemini_auth_failure_falls_back_offline(self) -> None:
+    def test_gemini_quota_failure_falls_back_offline(self) -> None:
         api_settings = _gemini_settings()
+        provider = Mock()
+        provider.name = "gemini"
+        provider.key_env_name = "GOOGLE_API_KEY"
+        provider.generate_json.side_effect = LLMQuotaError("quota exhausted")
 
         with (
             patch("ai.classify.settings", api_settings),
-            patch(
-                "ai.classify.generate_json",
-                side_effect=RuntimeError("401 api key invalid"),
-            ),
+            patch("ai.classify.get_provider", return_value=provider),
         ):
             result = classify.classify_article(
                 titulo="Publisher news",
@@ -151,7 +149,7 @@ class ClassificationFallbackTests(unittest.TestCase):
         self.assertTrue(classify._API_AUTH_FAILED)
         self.assertIn("GOOGLE_API_KEY", result.resumen_generado)
 
-    def test_active_provider_defaults_to_gemini_when_google_key_set(self) -> None:
+    def test_active_provider_and_model_reflect_settings(self) -> None:
         api_settings = _gemini_settings()
         with patch("ai.classify.settings", api_settings):
             self.assertEqual(classify.active_provider(), "gemini")
