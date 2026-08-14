@@ -62,6 +62,10 @@ async def ping_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
     await update.message.reply_text("pong — bot operativo")
 
 
+async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    await start_command(update, context)
+
+
 async def paises_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     if not update.message:
         return

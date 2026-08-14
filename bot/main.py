@@ -9,13 +9,16 @@ import time
 
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.cron import CronTrigger
-from telegram.ext import Application, CommandHandler, MessageHandler, filters
+from telegram.error import Conflict
+from telegram.ext import Application, CommandHandler, ContextTypes, MessageHandler, filters
 from zoneinfo import ZoneInfo
 
 from ai.classify import classify_pending
 from bot.config import settings
+from bot.heartbeat import write_heartbeat
 from bot.telegram_handlers import (
     free_text_report,
+    help_command,
     informe_command,
     informe_hoy_command,
     informe_mas_command,
@@ -126,6 +129,24 @@ async def _prewarm_embeddings_background() -> None:
         logger.exception("Embedding prewarm failed")
 
 
+async def _heartbeat_loop() -> None:
+    while True:
+        write_heartbeat(status="running")
+        await asyncio.sleep(60)
+
+
+async def _error_handler(update: object, context: ContextTypes.DEFAULT_TYPE) -> None:
+    error = context.error
+    if isinstance(error, Conflict):
+        logger.error(
+            "Otra instancia del bot está usando el mismo token (409 Conflict). "
+            "Saliendo para que launchd reinicie una sola instancia."
+        )
+        write_heartbeat(status="conflict", detail=str(error))
+        sys.exit(1)
+    logger.exception("Unhandled handler error: %s", error)
+
+
 def setup_scheduler(app: Application) -> AsyncIOScheduler:
     tz = ZoneInfo(settings.timezone)
     scheduler = AsyncIOScheduler(timezone=tz, job_defaults=_JOB_DEFAULTS)
@@ -171,7 +192,9 @@ def build_application() -> Application:
         .concurrent_updates(True)
         .build()
     )
+    app.add_error_handler(_error_handler)
     app.add_handler(CommandHandler("start", start_command))
+    app.add_handler(CommandHandler("help", help_command))
     app.add_handler(CommandHandler("ping", ping_command))
     app.add_handler(CommandHandler("informe", informe_command))
     app.add_handler(CommandHandler("informe_hoy", informe_hoy_command))
@@ -193,11 +216,20 @@ async def main_async() -> None:
 
     logger.info("Bot starting (timezone=%s, chat_id=%s)", settings.timezone, settings.telegram_chat_id)
     async with app:
+        me = await app.bot.get_me()
+        logger.info("Telegram conectado como @%s", me.username)
+
+        webhook = await app.bot.get_webhook_info()
+        if webhook.url:
+            logger.warning("Webhook activo detectado (%s) — eliminando para usar polling", webhook.url)
+        await app.bot.delete_webhook(drop_pending_updates=False)
+
         await app.start()
         await app.updater.start_polling(
             drop_pending_updates=False,
             poll_interval=0.5,
         )
+        write_heartbeat(status="running", detail=f"@{me.username}")
         logger.info(
             "Polling activo — bot listo en %.1fs",
             time.monotonic() - started,
@@ -206,11 +238,13 @@ async def main_async() -> None:
         scheduler = setup_scheduler(app)
         scheduler.start()
         asyncio.create_task(_prewarm_embeddings_background())
+        asyncio.create_task(_heartbeat_loop())
 
         try:
             while True:
                 await asyncio.sleep(3600)
         finally:
+            write_heartbeat(status="stopping")
             scheduler.shutdown(wait=False)
             await app.updater.stop()
             await app.stop()
@@ -221,7 +255,12 @@ def main() -> None:
         asyncio.run(main_async())
     except KeyboardInterrupt:
         logger.info("Shutting down")
+        write_heartbeat(status="stopped")
         sys.exit(0)
+    except Exception:
+        logger.exception("Bot crashed")
+        write_heartbeat(status="crashed")
+        sys.exit(1)
 
 
 if __name__ == "__main__":

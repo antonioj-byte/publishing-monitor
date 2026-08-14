@@ -146,6 +146,7 @@ start_bot() {
   fi
 
   sleep 2
+  python3 scripts/bot_status.py || true
   if [[ -f "$ROOT/data/bot.log" ]]; then
     echo ""
     echo "Últimas líneas del log:"

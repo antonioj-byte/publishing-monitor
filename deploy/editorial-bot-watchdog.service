@@ -1,0 +1,9 @@
+[Unit]
+Description=Watchdog for editorial Telegram bot
+After=network-online.target
+
+[Service]
+Type=oneshot
+WorkingDirectory=__PROJECT_DIR__
+EnvironmentFile=__PROJECT_DIR__/.env
+ExecStart=__PYTHON__ __PROJECT_DIR__/scripts/watchdog_bot.py

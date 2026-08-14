@@ -1,0 +1,10 @@
+[Unit]
+Description=Run editorial bot watchdog every 2 minutes
+
+[Timer]
+OnBootSec=2min
+OnUnitActiveSec=2min
+Unit=editorial-bot-watchdog.service
+
+[Install]
+WantedBy=timers.target
