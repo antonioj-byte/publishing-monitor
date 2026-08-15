@@ -64,6 +64,7 @@ class Settings:
     prioritize_embedding_model: str
     prioritize_embedding_prefix: str
     prewarm_embeddings_on_start: bool
+    classify_before_telegram_report: bool
 
     def has_classify_api(self) -> bool:
         if self.classify_provider == "gemini":
@@ -125,6 +126,10 @@ class Settings:
             ),
             prioritize_embedding_prefix=os.getenv("PRIORITIZE_EMBEDDING_PREFIX", ""),
             prewarm_embeddings_on_start=os.getenv("PREWARM_EMBEDDINGS_ON_START", "0").strip()
+            in ("1", "true", "yes"),
+            classify_before_telegram_report=os.getenv(
+                "CLASSIFY_BEFORE_TELEGRAM_REPORT", "0"
+            ).strip()
             in ("1", "true", "yes"),
         )
 

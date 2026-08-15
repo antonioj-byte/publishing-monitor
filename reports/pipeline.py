@@ -22,8 +22,8 @@ from reports.session import ReportSession
 logger = logging.getLogger(__name__)
 
 _BATCH_SIZE = 20
-_MIN_BATCHES = 5
 _MAX_BATCHES = 60
+_TELEGRAM_CLASSIFY_CAP = 1
 
 
 def _pending_in_window(
@@ -33,8 +33,8 @@ def _pending_in_window(
     date_by_publication: bool,
     mode: str = "informe",
 ) -> int:
+    since_iso = publication_since_iso(since)
     if mode == "informe_hoy":
-        since_iso = publication_since_iso(since)
         with get_connection() as conn:
             return conn.execute(
                 """
@@ -42,6 +42,15 @@ def _pending_in_window(
                 WHERE procesado = 0
                   AND fecha_publicacion IS NOT NULL AND fecha_publicacion != ''
                   AND fecha_publicacion >= ?
+                """,
+                (since_iso,),
+            ).fetchone()[0]
+    if mode == "informe" and not report_filter:
+        with get_connection() as conn:
+            return conn.execute(
+                """
+                SELECT COUNT(*) FROM articulos
+                WHERE procesado = 0 AND fecha_ingesta >= ?
                 """,
                 (since_iso,),
             ).fetchone()[0]
@@ -64,9 +73,9 @@ def _pending_in_window(
 
 def _max_classify_batches(pending: int) -> int:
     if pending <= 0:
-        return _MIN_BATCHES
-    needed = (pending + _BATCH_SIZE - 1) // _BATCH_SIZE + 2
-    return min(_MAX_BATCHES, max(_MIN_BATCHES, needed))
+        return 0
+    needed = (pending + _BATCH_SIZE - 1) // _BATCH_SIZE + 1
+    return min(_MAX_BATCHES, needed)
 
 
 def build_editorial_report(
@@ -76,6 +85,7 @@ def build_editorial_report(
     continuation: ReportSession | None = None,
     chat_id: str | None = None,
     classify_before_report: bool = True,
+    max_classify_batches: int | None = None,
 ) -> ReportResult:
     """
     Run the full editorial pipeline before generating a report.
@@ -95,21 +105,26 @@ def build_editorial_report(
             mode=resolved_mode,
         )
         max_batches = _max_classify_batches(pending)
-        stats = classify_all_pending(
-            report_filter=report_filter,
-            since_iso=since.astimezone(ZoneInfo("UTC")).isoformat(),
-            date_by_publication=use_pub_date,
-            batch_size=_BATCH_SIZE,
-            max_batches=max_batches,
-        )
-        logger.info(
-            "Pipeline classify: pending=%d batches=%d classified=%d failed=%d remaining=%d",
-            pending,
-            max_batches,
-            stats["classified"],
-            stats["failed"],
-            stats["remaining"],
-        )
+        if max_classify_batches is not None:
+            max_batches = min(max_batches, max_classify_batches)
+        if max_batches > 0:
+            stats = classify_all_pending(
+                report_filter=report_filter,
+                since_iso=since.astimezone(ZoneInfo("UTC")).isoformat(),
+                date_by_publication=use_pub_date,
+                batch_size=_BATCH_SIZE,
+                max_batches=max_batches,
+            )
+            logger.info(
+                "Pipeline classify: pending=%d batches=%d classified=%d failed=%d remaining=%d",
+                pending,
+                max_batches,
+                stats["classified"],
+                stats["failed"],
+                stats["remaining"],
+            )
+        else:
+            logger.info("Pipeline classify: skipped (pending=%d)", pending)
 
     report = build_report(
         mode=mode,

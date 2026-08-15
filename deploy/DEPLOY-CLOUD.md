@@ -33,6 +33,7 @@ En el servicio → **Variables**, añade (copia de tu `.env`):
 | `TELEGRAM_CHAT_ID` | Sí |
 | `DATABASE_PATH` | `/app/data/editorial.db` |
 | `TIMEZONE` | `Europe/Madrid` |
+| `CLASSIFY_BEFORE_TELEGRAM_REPORT` | `0` (default): informes Telegram rápidos; clasificación en cron `:15`. `1`: clasifica ~20 pendientes antes del informe. |
 
 Opcional: `MAX_DESTACADOS`, `MAX_RELEVANTES`, `MAX_SECUNDARIOS`, `MAX_ARTICLES_PER_MEDIO`.
 
