@@ -65,6 +65,8 @@ class Settings:
     prioritize_embedding_prefix: str
     prewarm_embeddings_on_start: bool
     classify_before_telegram_report: bool
+    github_repo: str
+    github_token: str
 
     def has_classify_api(self) -> bool:
         if self.classify_provider == "gemini":
@@ -131,6 +133,8 @@ class Settings:
                 "CLASSIFY_BEFORE_TELEGRAM_REPORT", "0"
             ).strip()
             in ("1", "true", "yes"),
+            github_repo=os.getenv("GITHUB_REPO", "antonioj-byte/publishing-monitor"),
+            github_token=os.getenv("GITHUB_TOKEN", ""),
         )
 
 
