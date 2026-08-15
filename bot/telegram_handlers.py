@@ -627,10 +627,13 @@ async def _send_report(
 
     chat_id = str(update.effective_chat.id)
     label = "Markdown" if markdown_only else "informe"
-    await update.message.reply_text(
-        f"Clasificando y generando {label}{_filter_label(report_filter)}…"
-    )
+    if settings.classify_before_telegram_report:
+        status = f"Clasificando y generando {label}{_filter_label(report_filter)}…"
+    else:
+        status = f"Generando {label}{_filter_label(report_filter)}…"
+    await update.message.reply_text(status)
 
+    classify_cap = 1 if settings.classify_before_telegram_report else None
     try:
         report = await asyncio.to_thread(
             partial(
@@ -638,6 +641,8 @@ async def _send_report(
                 mode=mode,
                 report_filter=report_filter,
                 chat_id=chat_id,
+                classify_before_report=settings.classify_before_telegram_report,
+                max_classify_batches=classify_cap,
             )
         )
 

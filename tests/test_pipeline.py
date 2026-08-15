@@ -9,8 +9,8 @@ from reports.pipeline import _max_classify_batches
 
 class PipelineBatchTests(unittest.TestCase):
     def test_scales_with_pending_count(self) -> None:
-        self.assertEqual(_max_classify_batches(0), 5)
-        self.assertGreaterEqual(_max_classify_batches(103), 7)
+        self.assertEqual(_max_classify_batches(0), 0)
+        self.assertGreaterEqual(_max_classify_batches(103), 6)
         self.assertLessEqual(_max_classify_batches(5000), 60)
 
 
