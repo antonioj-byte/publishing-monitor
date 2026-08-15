@@ -647,6 +647,7 @@ async def _send_report(
                 chat_id=chat_id,
                 classify_before_report=settings.classify_before_telegram_report,
                 max_classify_batches=classify_cap,
+                use_embedding_prioritization=settings.prioritize_before_telegram_report,
             )
         )
 

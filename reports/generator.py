@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import logging
 import re
 from dataclasses import dataclass
 from datetime import datetime, timedelta
@@ -24,6 +25,8 @@ from reports.prioritize import (
     prioritize_articles,
 )
 from reports.report_modes import ReportMode
+
+logger = logging.getLogger(__name__)
 
 CATEGORY_HEADERS: dict[Categoria, str] = {
     "ideas": "📚 Ideas del mundo editorial",
@@ -1019,6 +1022,7 @@ def build_report(
     *,
     continuation: ReportSession | None = None,
     chat_id: str | None = None,
+    use_embedding_prioritization: bool = True,
 ) -> ReportResult:
     if continuation:
         since = datetime.fromisoformat(continuation.since_iso)
@@ -1096,28 +1100,33 @@ def build_report(
         recency_window_days = (
             report_filter.days if catalog and report_filter and report_filter.days else None
         )
-        prioritization = prioritize_articles(batch, recency_window_days=recency_window_days)
-        if not prioritization.articles and not catalog:
-            now = _tz_now()
-            lines = _header_lines(mode, report_filter, now)
-            lines.append("")
-            lines.append(
-                "<i>No hay eventos editoriales que superen el umbral de priorización "
-                f"({settings.prioritize_score_threshold:.2f}) en este periodo.</i>"
-            )
-            return ReportResult(
-                text="\n".join(lines),
-                article_ids=[],
-                mode=mode,
-                total_matched=0,
-            )
+        if use_embedding_prioritization:
+            prioritization = prioritize_articles(batch, recency_window_days=recency_window_days)
+            if not prioritization.articles and not catalog:
+                now = _tz_now()
+                lines = _header_lines(mode, report_filter, now)
+                lines.append("")
+                lines.append(
+                    "<i>No hay eventos editoriales que superen el umbral de priorización "
+                    f"({settings.prioritize_score_threshold:.2f}) en este periodo.</i>"
+                )
+                return ReportResult(
+                    text="\n".join(lines),
+                    article_ids=[],
+                    mode=mode,
+                    total_matched=0,
+                )
 
-        trends = events_to_trends(prioritization.events)
-        if catalog:
-            ordered = _apply_report_limits(_order_catalog_articles(batch))
+            trends = events_to_trends(prioritization.events)
+            if catalog:
+                ordered = _apply_report_limits(_order_catalog_articles(batch))
+            else:
+                collapsed = _collapse_events_for_report(prioritization.articles)
+                ordered = _apply_report_limits(_order_articles(collapsed))
         else:
-            collapsed = _collapse_events_for_report(prioritization.articles)
-            ordered = _apply_report_limits(_order_articles(collapsed))
+            logger.info("Prioritization: skipped embeddings (fast Telegram path)")
+            trends = []
+            ordered = _apply_report_limits(_order_catalog_articles(batch))
         total_matched = len(ordered)
         all_ids = [a["id"] for a in ordered]
         start_cursor = 0

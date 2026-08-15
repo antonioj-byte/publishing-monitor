@@ -86,6 +86,7 @@ def build_editorial_report(
     chat_id: str | None = None,
     classify_before_report: bool = True,
     max_classify_batches: int | None = None,
+    use_embedding_prioritization: bool = True,
 ) -> ReportResult:
     """
     Run the full editorial pipeline before generating a report.
@@ -131,6 +132,7 @@ def build_editorial_report(
         report_filter=report_filter,
         continuation=continuation,
         chat_id=chat_id,
+        use_embedding_prioritization=use_embedding_prioritization,
     )
     logger.info(
         "Pipeline report mode=%s matched=%d shown=%d",

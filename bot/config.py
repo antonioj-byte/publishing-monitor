@@ -65,6 +65,7 @@ class Settings:
     prioritize_embedding_prefix: str
     prewarm_embeddings_on_start: bool
     classify_before_telegram_report: bool
+    prioritize_before_telegram_report: bool
     github_repo: str
     github_token: str
 
@@ -131,6 +132,10 @@ class Settings:
             in ("1", "true", "yes"),
             classify_before_telegram_report=os.getenv(
                 "CLASSIFY_BEFORE_TELEGRAM_REPORT", "0"
+            ).strip()
+            in ("1", "true", "yes"),
+            prioritize_before_telegram_report=os.getenv(
+                "PRIORITIZE_BEFORE_TELEGRAM_REPORT", "0"
             ).strip()
             in ("1", "true", "yes"),
             github_repo=os.getenv("GITHUB_REPO", "antonioj-byte/publishing-monitor"),
