@@ -15,6 +15,7 @@ from telegram.ext import ContextTypes
 
 from bot.auth import is_authorized, unauthorized_message
 from bot.config import settings
+from bot.db_export import export_database_bytes
 from bot.filters_info import list_available_filters
 from bot.pipeline_status import (
     format_diagnostico_text,
@@ -88,6 +89,7 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
         "/informe_mas — continuar el informe anterior\n"
         "/informe_md — descargar informe en Markdown (.md)\n"
         "/descargar — Markdown del último informe generado\n"
+        "/descargar_db — descargar la base de datos SQLite (.db)\n"
         "/estado — resumen de la base de datos\n"
         "/muestra — últimos artículos clasificados\n"
         "/diagnostico — por qué un informe sale vacío\n"
@@ -475,6 +477,34 @@ async def descargar_command(update: Update, context: ContextTypes.DEFAULT_TYPE) 
     except Exception as exc:
         logger.exception("Markdown download failed")
         await update.message.reply_text(f"Error al generar el Markdown: {exc}")
+
+
+async def descargar_db_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    if not update.message:
+        return
+    if not is_authorized(update):
+        await update.message.reply_text(
+            unauthorized_message(update.effective_chat.id if update.effective_chat else "?")
+        )
+        return
+
+    await update.message.reply_text("Preparando copia de la base de datos…")
+    try:
+        payload, filename = await asyncio.to_thread(export_database_bytes)
+        size_mb = len(payload.getvalue()) / (1024 * 1024)
+        await update.message.reply_document(
+            document=payload,
+            filename=filename,
+            caption=(
+                f"Base de datos editorial ({size_mb:.1f} MB)\n"
+                "Ábrela con DB Browser for SQLite (sqlitebrowser.org)."
+            ),
+        )
+    except FileNotFoundError as exc:
+        await update.message.reply_text(str(exc))
+    except Exception as exc:
+        logger.exception("Database download failed")
+        await update.message.reply_text(f"Error al exportar la base de datos: {exc}")
 
 
 async def informe_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
