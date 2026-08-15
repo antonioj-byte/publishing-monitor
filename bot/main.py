@@ -40,6 +40,7 @@ from bot.telegram_handlers import (
     tag_command,
     tags_command,
     unknown_command,
+    voice_report,
 )
 from bot.version import BOT_VERSION
 from db.connection import init_schema
@@ -238,6 +239,7 @@ def build_application() -> Application:
     app.add_handler(CommandHandler("reclasificar", reclasificar_command))
     app.add_handler(CommandHandler("retag", retag_command))
     app.add_handler(CommandHandler("reiniciar", reiniciar_command))
+    app.add_handler(MessageHandler(filters.VOICE, voice_report))
     app.add_handler(MessageHandler(filters.COMMAND, unknown_command))
     app.add_handler(
         MessageHandler(
