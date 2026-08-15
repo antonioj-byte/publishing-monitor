@@ -23,6 +23,7 @@ from bot.pipeline_status import (
     format_muestra_text,
 )
 from bot.report_parser import parse_command_args, parse_free_text
+from bot.github_pr import format_latest_pr_line
 from bot.reclassify_service import run_backfill_tags, run_reclassify_all
 from bot.restart_service import detect_restart_method, restart_bot, restart_method_hint
 from ai.classify import active_model, active_provider
@@ -113,8 +114,10 @@ async def ping_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
             unauthorized_message(update.effective_chat.id if update.effective_chat else "?")
         )
         return
+    pr_line = await asyncio.to_thread(format_latest_pr_line)
     await update.message.reply_text(
         f"pong — bot operativo (v{BOT_VERSION})\n"
+        f"{pr_line}\n"
         f"Clasificación: {active_provider()} ({active_model()})"
     )
 
