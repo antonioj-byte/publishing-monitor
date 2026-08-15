@@ -27,6 +27,9 @@ from bot.telegram_handlers import (
     informe_mas_command,
     informe_md_command,
     descargar_command,
+    estado_command,
+    diagnostico_command,
+    muestra_command,
     paises_command,
     ping_command,
     reclasificar_command,
@@ -224,6 +227,9 @@ def build_application() -> Application:
     app.add_handler(CommandHandler("informe_mas", informe_mas_command))
     app.add_handler(CommandHandler("informe_md", informe_md_command))
     app.add_handler(CommandHandler("descargar", descargar_command))
+    app.add_handler(CommandHandler("estado", estado_command))
+    app.add_handler(CommandHandler("diagnostico", diagnostico_command))
+    app.add_handler(CommandHandler("muestra", muestra_command))
     app.add_handler(CommandHandler("paises", paises_command))
     app.add_handler(CommandHandler("tags", tags_command))
     app.add_handler(CommandHandler("tag", tag_command))
@@ -259,6 +265,8 @@ async def main_async() -> None:
                 BotCommand("informe_mas", "Continuar informe anterior"),
                 BotCommand("informe_md", "Descargar informe en Markdown"),
                 BotCommand("descargar", "Markdown del último informe"),
+                BotCommand("estado", "Resumen de la base de datos"),
+                BotCommand("muestra", "Últimos artículos clasificados"),
                 BotCommand("tags", "Tags editoriales y países"),
                 BotCommand("reclasificar", "Reclasificar artículos sin tags"),
                 BotCommand("reiniciar", "Reiniciar el bot"),
