@@ -394,6 +394,111 @@ def _empty_tag_message(
     return "\n".join(lines)
 
 
+def _count_today_candidates(since: datetime) -> dict[str, int]:
+    """Counts for /informe_hoy diagnostics (strict publication date)."""
+    since_iso = publication_since_iso(since)
+    min_score = settings.min_relevance_score
+    with get_connection() as conn:
+        published_today = conn.execute(
+            """
+            SELECT COUNT(*) FROM articulos
+            WHERE fecha_publicacion IS NOT NULL AND fecha_publicacion != ''
+              AND fecha_publicacion >= ?
+            """,
+            (since_iso,),
+        ).fetchone()[0]
+        relevant = conn.execute(
+            """
+            SELECT COUNT(*) FROM articulos
+            WHERE procesado = 1 AND relevance_score >= ?
+              AND fecha_publicacion IS NOT NULL AND fecha_publicacion != ''
+              AND fecha_publicacion >= ?
+            """,
+            (min_score, since_iso),
+        ).fetchone()[0]
+        low_score = conn.execute(
+            """
+            SELECT COUNT(*) FROM articulos
+            WHERE procesado = 1 AND relevance_score < ?
+              AND fecha_publicacion IS NOT NULL AND fecha_publicacion != ''
+              AND fecha_publicacion >= ?
+            """,
+            (min_score, since_iso),
+        ).fetchone()[0]
+        pending = conn.execute(
+            """
+            SELECT COUNT(*) FROM articulos
+            WHERE procesado = 0
+              AND fecha_publicacion IS NOT NULL AND fecha_publicacion != ''
+              AND fecha_publicacion >= ?
+            """,
+            (since_iso,),
+        ).fetchone()[0]
+        ingested_today = conn.execute(
+            """
+            SELECT COUNT(*) FROM articulos
+            WHERE fecha_ingesta >= ?
+            """,
+            (since_iso,),
+        ).fetchone()[0]
+    return {
+        "published_today": published_today,
+        "relevant": relevant,
+        "low_score": low_score,
+        "pending": pending,
+        "ingested_today": ingested_today,
+    }
+
+
+def _empty_today_message(since: datetime) -> str:
+    stats = _count_today_candidates(since)
+    min_score = settings.min_relevance_score
+    lines = [
+        "<i>No hay artículos publicados hoy que cumplan los criterios "
+        f"(score ≥ {min_score}, alcance editorial).</i>",
+        "",
+        "En base de datos (fecha de publicación = hoy):",
+        f"  · {stats['published_today']} con fecha de hoy",
+        f"  · {stats['relevant']} clasificados con score ≥ {min_score}",
+        f"  · {stats['low_score']} clasificados pero descartados (score bajo / fuera de alcance)",
+        f"  · {stats['pending']} pendientes de clasificar",
+        f"  · {stats['ingested_today']} ingeridos hoy (pueden ser de días anteriores)",
+    ]
+    if stats["published_today"] == 0:
+        lines.extend(
+            [
+                "",
+                "Todavía no hay artículos con fecha de publicación de hoy en la BD.",
+                "Prueba `/informe` (desde el último cierre) o `/informe 2`.",
+                "Nota: `/muestra` ordena por ingesta, no por publicación.",
+            ]
+        )
+    elif stats["pending"]:
+        lines.extend(
+            [
+                "",
+                "Hay artículos de hoy sin clasificar. Repite `/informe_hoy` en 1-2 minutos.",
+            ]
+        )
+    elif stats["low_score"] and not stats["relevant"]:
+        lines.extend(
+            [
+                "",
+                "Hay artículos de hoy pero fuera de alcance editorial (ruido). "
+                "Revisa `/muestra ruido`.",
+            ]
+        )
+    elif stats["relevant"]:
+        lines.extend(
+            [
+                "",
+                "Hay candidatos con score alto pero el filtro editorial los descartó. "
+                "Prueba `/diagnostico`.",
+            ]
+        )
+    return "\n".join(lines)
+
+
 def _empty_country_message(
     report_filter: ReportFilter,
     since: datetime,
@@ -974,9 +1079,7 @@ def build_report(
                     )
             else:
                 if mode == "informe_hoy":
-                    lines.append(
-                        "<i>No hay artículos publicados hoy que cumplan los criterios.</i>"
-                    )
+                    lines.append(_empty_today_message(since))
                 else:
                     lines.append(
                         "<i>No hay artículos que cumplan los criterios en este periodo.</i>"

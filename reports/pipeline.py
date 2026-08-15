@@ -7,7 +7,9 @@ from datetime import datetime
 from zoneinfo import ZoneInfo
 
 from ai.classify import classify_all_pending
+from db.connection import get_connection
 from db.models import ReportFilter
+from reports.dates import publication_since_iso
 from reports.generator import (
     ReportResult,
     _count_country_candidates,
@@ -29,7 +31,20 @@ def _pending_in_window(
     since: datetime,
     *,
     date_by_publication: bool,
+    mode: str = "informe",
 ) -> int:
+    if mode == "informe_hoy":
+        since_iso = publication_since_iso(since)
+        with get_connection() as conn:
+            return conn.execute(
+                """
+                SELECT COUNT(*) FROM articulos
+                WHERE procesado = 0
+                  AND fecha_publicacion IS NOT NULL AND fecha_publicacion != ''
+                  AND fecha_publicacion >= ?
+                """,
+                (since_iso,),
+            ).fetchone()[0]
     if report_filter and (report_filter.pais or report_filter.region):
         _, pending, _ = _count_country_candidates(
             report_filter,
@@ -77,6 +92,7 @@ def build_editorial_report(
             report_filter,
             since,
             date_by_publication=use_pub_date,
+            mode=resolved_mode,
         )
         max_batches = _max_classify_batches(pending)
         stats = classify_all_pending(
