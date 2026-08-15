@@ -123,7 +123,7 @@ Informes automáticos: **06:30** (Europe/Madrid), si el servidor está activo.
 |---------|-------|----------|
 | No responde nada | Dos bots con el mismo token | Para Mac/Cursor; deja solo Railway/Fly |
 | Informe vacío al inicio | BD nueva sin ingesta | Espera 1–2 h o ejecuta ingesta manual en logs |
-| OOM / *Deploy Ran Out of Memory* | RAM insuficiente (embeddings ~400 MB + Python) | Railway → servicio → **Settings → Resources → 1 GB** mínimo. No lances `/reclasificar` y `/informe` a la vez justo tras reiniciar |
+| OOM / *Deploy Ran Out of Memory* | RAM insuficiente en **build** (pip + modelo embeddings en Dockerfile) o en **runtime** | Quita prewarm del build (PR #43+). Runtime: **Settings → Resources → 1 GB** mínimo. No lances `/reclasificar` y `/informe` a la vez justo tras reiniciar |
 
 ## Volver al Mac después de vacaciones
 
