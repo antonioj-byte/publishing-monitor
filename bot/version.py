@@ -1,3 +1,3 @@
 """Deployed bot version string (shown in /ping and logs)."""
 
-BOT_VERSION = "2026-08-14-gemini-models"
+BOT_VERSION = "2026-08-15-db-inspection"

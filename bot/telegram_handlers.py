@@ -16,7 +16,11 @@ from telegram.ext import ContextTypes
 from bot.auth import is_authorized, unauthorized_message
 from bot.config import settings
 from bot.filters_info import list_available_filters
-from bot.reclassify_service import run_backfill_tags, run_reclassify_all
+from bot.pipeline_status import (
+    format_diagnostico_text,
+    format_estado_text,
+    format_muestra_text,
+)
 from bot.report_parser import parse_command_args, parse_free_text
 from bot.restart_service import detect_restart_method, restart_bot, restart_method_hint
 from ai.classify import active_model, active_provider
@@ -84,6 +88,9 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
         "/informe_mas — continuar el informe anterior\n"
         "/informe_md — descargar informe en Markdown (.md)\n"
         "/descargar — Markdown del último informe generado\n"
+        "/estado — resumen de la base de datos\n"
+        "/muestra — últimos artículos clasificados\n"
+        "/diagnostico — por qué un informe sale vacío\n"
         "/tags — tags editoriales y países disponibles\n"
         "/reclasificar — reclasificar artículos sin tags\n"
         "/reclasificar todo — reclasificar todos desde cero\n"
@@ -111,6 +118,75 @@ async def ping_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
 
 async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     await start_command(update, context)
+
+
+async def estado_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    if not update.message:
+        return
+    if not is_authorized(update):
+        await update.message.reply_text(
+            unauthorized_message(update.effective_chat.id if update.effective_chat else "?")
+        )
+        return
+    try:
+        text = await asyncio.to_thread(format_estado_text)
+    except Exception as exc:
+        logger.exception("estado failed")
+        text = f"Error en /estado: {exc}"
+    await update.message.reply_text(text)
+
+
+async def diagnostico_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    if not update.message:
+        return
+    if not is_authorized(update):
+        await update.message.reply_text(
+            unauthorized_message(update.effective_chat.id if update.effective_chat else "?")
+        )
+        return
+    args = context.args or []
+    report_filter = None
+    if args:
+        try:
+            parsed = parse_command_args(args)
+        except ValueError as exc:
+            await update.message.reply_text(str(exc))
+            return
+        if parsed:
+            report_filter = _filter_from_parsed(parsed)
+    try:
+        text = await asyncio.to_thread(format_diagnostico_text, report_filter)
+    except Exception as exc:
+        logger.exception("diagnostico failed")
+        text = f"Error en /diagnostico: {exc}"
+    await update.message.reply_text(text)
+
+
+async def muestra_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    if not update.message:
+        return
+    if not is_authorized(update):
+        await update.message.reply_text(
+            unauthorized_message(update.effective_chat.id if update.effective_chat else "?")
+        )
+        return
+    args = [a.lower() for a in (context.args or [])]
+    only_untagged = any(a in ("sin_tags", "sin-tags", "untagged") for a in args)
+    limit = 5
+    for arg in args:
+        if arg.isdigit():
+            limit = int(arg)
+            break
+    try:
+        text = await asyncio.to_thread(
+            format_muestra_text,
+            limit=limit,
+            only_untagged=only_untagged,
+        )
+    except Exception as exc:
+        logger.exception("muestra failed")
+        text = f"Error en /muestra: {exc}"
+    await update.message.reply_text(text)
 
 
 _RECLASSIFY_RUNNING = False
