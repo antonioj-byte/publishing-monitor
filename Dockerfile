@@ -11,8 +11,7 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 COPY . .
 
-RUN mkdir -p /app/data \
-    && python3 scripts/prewarm_embeddings.py || true
+RUN mkdir -p /app/data
 
 ENV PYTHONUNBUFFERED=1 \
     DATABASE_PATH=/app/data/editorial.db \
