@@ -139,6 +139,7 @@ def _compute_embeddings(texts: list[str]) -> np.ndarray:
     prefixed = [f"{prefix}{text}" if prefix else text for text in texts]
     vectors = list(embedder.embed(prefixed))
     matrix = np.asarray(vectors, dtype=np.float32)
+    del vectors
     norms = np.linalg.norm(matrix, axis=1, keepdims=True)
     norms = np.where(norms == 0, 1.0, norms)
     return matrix / norms

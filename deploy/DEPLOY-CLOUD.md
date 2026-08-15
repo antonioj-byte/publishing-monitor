@@ -50,9 +50,10 @@ Railway crea volúmenes **desde el canvas del proyecto**, no siempre dentro del 
 
 ### 4. Desplegar
 
-1. **Deploy** (automático al push, o manual).
-2. Revisa **Logs**: debe aparecer `Polling activo — bot listo`.
-3. En Telegram: **`/ping`**.
+1. **Memoria (importante):** en el servicio → **Settings** → **Resources** → asigna **≥ 1 GB RAM**. Con menos, el modelo de embeddings puede provocar *Deploy Ran Out of Memory*.
+2. **Deploy** (automático al push, o manual).
+3. Revisa **Logs**: debe aparecer `Polling activo — bot listo`.
+4. En Telegram: **`/ping`**.
 
 ### 5. Coste orientativo
 
@@ -102,6 +103,17 @@ O sin Docker:
 
 Desde Telegram: **`/ping`** (debe responder al instante).
 
+Para descargar la base de datos SQLite sin terminal: **`/descargar_db`** (te envía el archivo `.db`).
+
+Para acceso por terminal al contenedor (no `railway shell`, que es local):
+
+```bash
+ssh-keygen -t ed25519 -C "tu@email.com"
+# Sube la clave pública en railway.com → Settings → SSH Keys
+railway ssh
+ls -lh /app/data/editorial.db
+```
+
 Informes automáticos: **06:30** (Europe/Madrid), si el servidor está activo.
 
 ## Problemas frecuentes
@@ -110,7 +122,7 @@ Informes automáticos: **06:30** (Europe/Madrid), si el servidor está activo.
 |---------|-------|----------|
 | No responde nada | Dos bots con el mismo token | Para Mac/Cursor; deja solo Railway/Fly |
 | Informe vacío al inicio | BD nueva sin ingesta | Espera 1–2 h o ejecuta ingesta manual en logs |
-| OOM / crash | Poca RAM | Sube a 1 GB mínimo |
+| OOM / *Deploy Ran Out of Memory* | RAM insuficiente (embeddings ~400 MB + Python) | Railway → servicio → **Settings → Resources → 1 GB** mínimo. No lances `/reclasificar` y `/informe` a la vez justo tras reiniciar |
 
 ## Volver al Mac después de vacaciones
 

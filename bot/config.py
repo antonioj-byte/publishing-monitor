@@ -63,6 +63,7 @@ class Settings:
     prioritize_tier2_rep_threshold: int
     prioritize_embedding_model: str
     prioritize_embedding_prefix: str
+    prewarm_embeddings_on_start: bool
 
     def has_classify_api(self) -> bool:
         if self.classify_provider == "gemini":
@@ -107,7 +108,7 @@ class Settings:
                 os.getenv("PRIORITIZE_GENERIC_SIMILARITY_THRESHOLD", "0.88")
             ),
             prioritize_max_cluster_size=int(os.getenv("PRIORITIZE_MAX_CLUSTER_SIZE", "8")),
-            prioritize_max_batch=int(os.getenv("PRIORITIZE_MAX_BATCH", "120")),
+            prioritize_max_batch=int(os.getenv("PRIORITIZE_MAX_BATCH", "80")),
             prioritize_score_threshold=float(os.getenv("PRIORITIZE_SCORE_THRESHOLD", "0.45")),
             prioritize_recency_hours_full=float(os.getenv("PRIORITIZE_RECENCY_HOURS_FULL", "24")),
             prioritize_recency_hours_partial=float(os.getenv("PRIORITIZE_RECENCY_HOURS_PARTIAL", "48")),
@@ -123,6 +124,8 @@ class Settings:
                 "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2",
             ),
             prioritize_embedding_prefix=os.getenv("PRIORITIZE_EMBEDDING_PREFIX", ""),
+            prewarm_embeddings_on_start=os.getenv("PREWARM_EMBEDDINGS_ON_START", "0").strip()
+            in ("1", "true", "yes"),
         )
 
 

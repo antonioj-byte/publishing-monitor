@@ -10,7 +10,6 @@ if [[ ! -f /app/data/editorial.db ]]; then
   python3 scripts/init_db.py
   python3 scripts/load_medios.py
   python3 scripts/sync_tiers.py
-  python3 scripts/prewarm_embeddings.py || true
   echo "→ Base de datos lista. La ingesta arranca con el scheduler del bot."
 fi
 

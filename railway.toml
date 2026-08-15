@@ -5,4 +5,4 @@ dockerfilePath = "Dockerfile"
 [deploy]
 restartPolicyType = "ON_FAILURE"
 restartPolicyMaxRetries = 10
-# Redeploy trigger: informe_hoy diagnostics — 2026-08-15
+# Redeploy trigger: reduce startup memory (OOM fix) — 2026-08-15
