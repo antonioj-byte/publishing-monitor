@@ -410,5 +410,53 @@ class CatalogReportIntegrationTests(unittest.TestCase):
         self.assertLess(result.total_matched, 10)
 
 
+class InformeHoyDiagnosticsTests(unittest.TestCase):
+    def test_empty_today_message_explains_no_publication_date(self) -> None:
+        with TemporaryDirectory() as temp_dir:
+            db_path = Path(temp_dir) / "test.db"
+            conn = sqlite3.connect(db_path)
+            conn.executescript(
+                """
+                CREATE TABLE medios (
+                    id INTEGER PRIMARY KEY, nombre TEXT, region TEXT, pais TEXT, tier INTEGER
+                );
+                CREATE TABLE articulos (
+                    id INTEGER PRIMARY KEY, medio_id INTEGER, titulo_original TEXT,
+                    titular_traducido TEXT, resumen_generado TEXT, resumen_raw TEXT,
+                    idioma TEXT, url TEXT, categoria TEXT, relevance_score INTEGER,
+                    fecha_publicacion TEXT, fecha_ingesta TEXT, procesado INTEGER,
+                    enviado INTEGER, tags TEXT
+                );
+                INSERT INTO medios VALUES (1, 'Test', 'eu', 'es', 2);
+                INSERT INTO articulos VALUES (
+                    1, 1, 'Old piece', 'Old', 'Summary', 'Summary', 'es',
+                    'https://example.com/old', 'noticias', 4,
+                    '2026-08-13T10:00:00+00:00', '2026-08-15T08:00:00+00:00', 1, 0, '[]'
+                );
+                """
+            )
+            conn.commit()
+            conn.close()
+
+            @contextmanager
+            def test_connection():
+                test_conn = sqlite3.connect(db_path)
+                test_conn.row_factory = sqlite3.Row
+                try:
+                    yield test_conn
+                finally:
+                    test_conn.close()
+
+            since = datetime(2026, 8, 15, 0, 0, tzinfo=ZoneInfo("Europe/Madrid"))
+            with patch("reports.generator.get_connection", test_connection):
+                from reports.generator import _empty_today_message
+
+                message = _empty_today_message(since)
+
+        self.assertIn("fecha de publicación de hoy", message)
+        self.assertIn("ingeridos hoy", message)
+        self.assertIn("/muestra", message)
+
+
 if __name__ == "__main__":
     unittest.main()
