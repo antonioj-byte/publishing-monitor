@@ -23,6 +23,7 @@ from bot.pipeline_status import (
     format_muestra_text,
 )
 from bot.report_parser import parse_command_args, parse_free_text
+from bot.reclassify_service import run_backfill_tags, run_reclassify_all
 from bot.restart_service import detect_restart_method, restart_bot, restart_method_hint
 from ai.classify import active_model, active_provider
 from ai.llm_provider import get_provider
