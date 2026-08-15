@@ -389,6 +389,35 @@ class CatalogReportIntegrationTests(unittest.TestCase):
         self.assertGreater(result.total_matched, 10)
         self.assertEqual(result.mode, "informe_pais")
 
+    def test_fast_path_skips_embedding_prioritization(self) -> None:
+        with TemporaryDirectory() as temp_dir:
+            db_path = Path(temp_dir) / "test.db"
+            self._build_db(db_path, num_articles=15, num_medios=8)
+
+            @contextmanager
+            def test_connection():
+                test_conn = sqlite3.connect(db_path)
+                test_conn.row_factory = sqlite3.Row
+                try:
+                    yield test_conn
+                finally:
+                    test_conn.close()
+
+            with (
+                patch("reports.generator.get_connection", test_connection),
+                patch("reports.generator.prioritize_articles") as prioritize,
+            ):
+                result = build_report(
+                    mode="informe_pais",
+                    report_filter=ReportFilter(
+                        days=7, tags=["ficcion"], tag_labels=["Ficción"]
+                    ),
+                    use_embedding_prioritization=False,
+                )
+
+        prioritize.assert_not_called()
+        self.assertGreater(result.total_matched, 10)
+
     def test_daily_digest_still_filters_stale_singleton_articles(self) -> None:
         """Same articles, but /informe (daily digest) must keep its strict threshold."""
         with TemporaryDirectory() as temp_dir:

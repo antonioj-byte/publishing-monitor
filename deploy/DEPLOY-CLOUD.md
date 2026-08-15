@@ -34,6 +34,7 @@ En el servicio → **Variables**, añade (copia de tu `.env`):
 | `DATABASE_PATH` | `/app/data/editorial.db` |
 | `TIMEZONE` | `Europe/Madrid` |
 | `CLASSIFY_BEFORE_TELEGRAM_REPORT` | `0` (default): informes Telegram rápidos; clasificación en cron `:15`. `1`: clasifica ~20 pendientes antes del informe. |
+| `PRIORITIZE_BEFORE_TELEGRAM_REPORT` | `0` (default): sin embeddings en Telegram (segundos). `1`: clustering semántico (+1–2 min, sección «En varios medios»). |
 
 Opcional: `MAX_DESTACADOS`, `MAX_RELEVANTES`, `MAX_SECUNDARIOS`, `MAX_ARTICLES_PER_MEDIO`.
 
