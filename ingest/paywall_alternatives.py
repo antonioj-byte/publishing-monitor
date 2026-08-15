@@ -12,7 +12,7 @@ GRANTA_SUBSTACK_RSS = "https://grantamag.substack.com/feed"
 
 # Google News RSS indexes public headlines/snippets when direct feeds or scraping fail.
 GOOGLE_NEWS_QUERIES: dict[str, str] = {
-    "Wall Street Journal Books": "site:wsj.com book review",
+    "Wall Street Journal Books": "site:wsj.com/arts-culture/books",
     "The Times Books": "site:thetimes.com culture books review",
     "Washington Post Books": "site:washingtonpost.com/entertainment/books",
     "The Globe and Mail Books": "site:theglobeandmail.com/arts/books",
@@ -34,7 +34,7 @@ PAYWALL_ALTERNATIVES: dict[str, dict[str, str]] = {
     "Wall Street Journal Books": {
         "problema": "Scraping 401; feeds Dow Jones requieren API key",
         "alternativa": "Google News RSS (titulares públicos indexados)",
-        "url": google_news_rss("site:wsj.com book review"),
+        "url": google_news_rss("site:wsj.com/arts-culture/books"),
         "metodo": "rss",
     },
     "The Times Books": {

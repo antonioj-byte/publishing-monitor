@@ -330,13 +330,20 @@ def _format_filtered_diagnostico(report_filter: ReportFilter) -> str:
     return "\n".join(lines)
 
 
-def format_muestra_text(*, limit: int = 5, only_untagged: bool = False) -> str:
+def format_muestra_text(
+    *,
+    limit: int = 5,
+    only_untagged: bool = False,
+    only_noise: bool = False,
+) -> str:
     init_schema()
     limit = max(1, min(limit, 15))
 
     conditions = ["a.procesado = 1"]
     if only_untagged:
         conditions.append("(a.tags IS NULL OR a.tags = '' OR a.tags = '[]')")
+    if only_noise:
+        conditions.append("COALESCE(a.relevance_score, 1) <= 2")
     where = " AND ".join(conditions)
 
     with get_connection() as conn:
@@ -354,11 +361,18 @@ def format_muestra_text(*, limit: int = 5, only_untagged: bool = False) -> str:
         ).fetchall()
 
     if not rows:
+        if only_noise:
+            return "No hay artículos de ruido recientes (score 1-2)."
         if only_untagged:
             return "No hay artículos clasificados sin tags."
         return "No hay artículos clasificados todavía."
 
-    title = "Últimos sin tags" if only_untagged else "Últimos clasificados"
+    if only_noise:
+        title = "Últimos fuera de alcance / ruido"
+    elif only_untagged:
+        title = "Últimos sin tags"
+    else:
+        title = "Últimos clasificados"
     lines = [f"{title} (máx. {limit}):", ""]
 
     for row in rows:

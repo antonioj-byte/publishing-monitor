@@ -27,9 +27,10 @@ _ESSAY = re.compile(
     re.IGNORECASE,
 )
 _INDUSTRY = re.compile(
-    r"\b(editorial|editoriales|merger|adquisicion|adquisición|sello|imprint|"
+    r"\b(merger|adquisicion|adquisición|sello|imprint|"
     r"rights|derechos|traduccion|traducción|feria del libro|book fair|premio|prize|"
-    r"planeta|booker|nobel)\b",
+    r"planeta|booker|nobel|book publisher|publishing house|publishing group|"
+    r"industria editorial|book trade)\b",
     re.IGNORECASE,
 )
 _POETRY = re.compile(r"\b(poesia|poesía|poema|poetry|poet)\b", re.IGNORECASE)

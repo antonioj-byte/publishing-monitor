@@ -80,13 +80,31 @@ OFF_TOPIC_TERMS = (
     "chef ",
     "receta de cocina",
     "recipe ",
-    # Gaming / tech general
+    # Gaming / tech / business general (not publishing-specific)
     "video game",
     "videojuego",
     "playstation",
     "xbox",
     "smartphone launch",
     "startup funding round",
+    "job seeker",
+    "job seekers",
+    "resume",
+    "résumé",
+    "curriculum vitae",
+    "marketer",
+    "marketers",
+    "marketing campaign",
+    "payment company",
+    "fintech",
+    "private equity",
+    "merger talks",
+    "acquisition talks",
+    "stock price",
+    "earnings report",
+    "wall street",
+    "stripe",
+    "paypal",
 )
 
 # Literary / publishing signals. Any match helps keep the article.
@@ -112,10 +130,16 @@ ON_TOPIC_TERMS = (
     "publisher",
     "publishers",
     "publishing",
-    "editorial",
-    "editoriales",
+    "publishing house",
+    "book publisher",
+    "trade publishing",
     "imprint",
-    "manuscript",
+    "industria editorial",
+    "book industry",
+    "publishing industry",
+    "publishing sector",
+    "mundo editorial",
+    "book trade",
     "manuscrito",
     "bestseller",
     "best seller",
@@ -200,6 +224,16 @@ WEAK_OFF_TOPIC_TERMS = (
     " fashion ",
 )
 
+_NEGATED_SCOPE = re.compile(
+    r"("
+    r"sin relaci[oó]n con libros|sin relacion con libros|"
+    r"no guarda relaci[oó]n|not related to books|"
+    r"without.*(?:book|literary|publishing)|"
+    r"no.*(?:literary|editorial|book).*(?:angle|vinculo|vínculo)"
+    r")",
+    re.IGNORECASE,
+)
+
 
 def _normalize(text: str) -> str:
     text = text.lower()
@@ -233,6 +267,9 @@ def is_editorial_scope(
     ]
     text = _normalize(" ".join(p for p in parts if p))
     if not text:
+        return False
+
+    if _NEGATED_SCOPE.search(text):
         return False
 
     on_topic = _count_terms(text, ON_TOPIC_TERMS)
@@ -270,17 +307,25 @@ def filter_editorial_scope(articles: list[dict]) -> list[dict]:
 
 def apply_keyword_scope_filter(articles: list[dict]) -> list[dict]:
     """
-    Keyword safety net for articles not yet vetted by the LLM classifier.
+    Keyword safety net after LLM classification.
 
-    Articles already classified with relevance_score >= min_relevance_score were
-    approved by Claude (en_alcance) and must not be dropped again here — the
-    keyword list is EN/ES-heavy and rejects valid DE/FR literary pieces.
+    Articles with relevance_score >= min_relevance_score skip re-filtering only
+    when they still pass is_editorial_scope (avoids EN/ES-heavy false negatives
+    on valid DE/FR pieces, but drops mis-tagged business/tech noise).
     """
+    kept: list[dict] = []
     min_score = settings.min_relevance_score
-    trusted = [
-        article
-        for article in articles
-        if (article.get("relevance_score") or 0) >= min_score
-    ]
-    untrusted = [article for article in articles if article not in trusted]
-    return trusted + filter_editorial_scope(untrusted)
+    for article in articles:
+        in_scope = is_editorial_scope(
+            titulo=article.get("titulo_original", ""),
+            titular_traducido=article.get("titular_traducido"),
+            resumen=article.get("resumen_raw"),
+            resumen_generado=article.get("resumen_generado"),
+        )
+        score = article.get("relevance_score") or 0
+        if in_scope:
+            kept.append(article)
+        elif score < min_score:
+            continue
+        # High LLM score but keyword filter disagrees — drop (likely false positive).
+    return kept

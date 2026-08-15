@@ -16,6 +16,7 @@ El informe es **solo** de libros, literatura, autores e industria editorial.
 - Música, conciertos, álbumes, festivales musicales
 - Cine, series, TV, streaming
 - Deportes, moda, gastronomía, videojuegos
+- Negocios, finanzas, empleo o marketing tech sin vínculo con libros/editoriales
 - Cultura general sin vínculo claro con libros o la industria editorial
 
 Aunque el medio sea Tier 1, si el artículo es de música/cine/cultura general → fuera.

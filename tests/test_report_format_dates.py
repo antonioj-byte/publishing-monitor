@@ -85,6 +85,7 @@ class PublicationDateTests(unittest.TestCase):
             with (
                 patch("reports.generator.get_connection", test_connection),
                 patch("reports.generator.filter_editorial_scope", lambda rows: rows),
+                patch("reports.generator.apply_keyword_scope_filter", lambda rows: rows),
                 patch("reports.generator.get_tier", lambda _name: 1),
             ):
                 articles = _fetch_articles(
