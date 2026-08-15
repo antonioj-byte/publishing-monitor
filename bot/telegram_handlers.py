@@ -91,7 +91,7 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
         "/descargar — Markdown del último informe generado\n"
         "/descargar_db — descargar la base de datos SQLite (.db)\n"
         "/estado — resumen de la base de datos\n"
-        "/muestra — últimos artículos clasificados\n"
+        "/muestra — últimos artículos clasificados (/muestra ruido)\n"
         "/diagnostico — por qué un informe sale vacío\n"
         "/tags — tags editoriales y países disponibles\n"
         "/reclasificar — reclasificar artículos sin tags\n"
@@ -174,6 +174,7 @@ async def muestra_command(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
         return
     args = [a.lower() for a in (context.args or [])]
     only_untagged = any(a in ("sin_tags", "sin-tags", "untagged") for a in args)
+    only_noise = any(a in ("ruido", "noise", "fuera") for a in args)
     limit = 5
     for arg in args:
         if arg.isdigit():
@@ -184,6 +185,7 @@ async def muestra_command(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
             format_muestra_text,
             limit=limit,
             only_untagged=only_untagged,
+            only_noise=only_noise,
         )
     except Exception as exc:
         logger.exception("muestra failed")

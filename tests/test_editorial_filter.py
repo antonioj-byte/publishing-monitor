@@ -69,12 +69,41 @@ class EditorialFilterTests(unittest.TestCase):
             )
         )
 
+    def test_rejects_general_business_even_with_editorial_in_summary(self) -> None:
+        self.assertFalse(
+            is_editorial_scope(
+                titulo="Stripe, Advent in Talks to Buy PayPal - WSJ",
+                resumen_generado=(
+                    "Operación financiera entre empresas de pagos digitales, "
+                    "sin relación con libros, literatura o el sector editorial."
+                ),
+            )
+        )
+
+    def test_rejects_ai_marketing_piece(self) -> None:
+        self.assertFalse(
+            is_editorial_scope(
+                titulo="As AI Rewrites Search for Marketers, Reddit Fights to Stay the Same",
+                resumen_generado=(
+                    "Analiza cómo la búsqueda impulsada por IA transforma el marketing digital."
+                ),
+            )
+        )
+
+    def test_rejects_job_seeker_resume_advice(self) -> None:
+        self.assertFalse(
+            is_editorial_scope(
+                titulo="Job Seekers Are Racing to AI-Proof Their Résumés",
+                resumen="Consejos de empleo y selección de personal con IA.",
+            )
+        )
+
     def test_trusts_llm_classified_articles_in_reports(self) -> None:
         classified = {
-            "titulo_original": "Stadtrat beschließt neue Kulturpolitik",
-            "titular_traducido": "El ayuntamiento aprueba cultura",
-            "resumen_raw": "Debatte über Subventionen",
-            "resumen_generado": "Política cultural local",
+            "titulo_original": "Neuer Roman der Autorin erscheint im Herbst",
+            "titular_traducido": "La nueva novela de la autora llega en otoño",
+            "resumen_raw": "Der Verlag kündigt die Buchpremiere an",
+            "resumen_generado": "El sello anuncia la publicación de la novela en Frankfurt.",
             "relevance_score": 4,
         }
         unclassified = {
@@ -84,8 +113,16 @@ class EditorialFilterTests(unittest.TestCase):
             "resumen_generado": "Musik und Konzerte",
             "relevance_score": 2,
         }
-        kept = apply_keyword_scope_filter([classified, unclassified])
-        self.assertEqual([item["relevance_score"] for item in kept], [4])
+        misclassified = {
+            "titulo_original": "Stripe in Talks to Buy PayPal",
+            "titular_traducido": "Stripe negocia comprar PayPal",
+            "resumen_raw": "Payment deal",
+            "resumen_generado": "Acuerdo entre fintechs, sin ángulo editorial.",
+            "relevance_score": 4,
+        }
+        kept = apply_keyword_scope_filter([classified, unclassified, misclassified])
+        self.assertEqual(len(kept), 1)
+        self.assertEqual(kept[0]["titulo_original"], classified["titulo_original"])
 
 
 if __name__ == "__main__":

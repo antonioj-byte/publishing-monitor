@@ -72,12 +72,21 @@ Alcance editorial (en_alcance = true) — INCLUIR:
 - Autores, premios literarios, ferias del libro, reseñas de libros
 - Debate literario, canon, crítica literaria, memoria editorial
 
-Fuera de alcance (en_alcance = false) — EXCLUIR aunque el medio sea Tier 1:
+Fuera de alcance (en_alcance = false) — EXCLUIR aunque el medio sea Tier 1 o la sección se llame "Books":
 - Música, conciertos, álbumes, festivales musicales
 - Cine, series, TV, streaming, estrenos audiovisuales
 - Deportes, moda, gastronomía, videojuegos, tecnología general
 - Cultura general sin vínculo claro con libros, lectura o industria editorial
-- Política, economía o sociedad sin ángulo editorial/literario
+- Política, economía, finanzas, empleo o marketing digital SIN ángulo editorial/literario
+- IA aplicada a marketing, búsqueda web, RRHH o pagos (NO es ia_tecnologia editorial)
+
+Ejemplos fuera de alcance (WSJ Books y similares):
+- "Stripe in talks to buy PayPal" → en_alcance false, score 1, tags []
+- "Job seekers AI-proof their résumés" → en_alcance false, score 1, tags []
+- "AI rewrites search for marketers" → en_alcance false, score 1, tags []
+
+ia_tecnologia — SOLO si la IA afecta a edición, traducción, maquetación, descubrimiento de libros,
+audiollibros o flujos de trabajo en editoriales/librerías. NO para IA genérica en tech o negocios.
 
 Reglas de categoría:
 - "ideas": ensayos, crónicas largas, reportajes de fondo, reflexión literaria o cultural con eje libros.
@@ -204,7 +213,7 @@ def finalize_result(
             relevance_score=min(result.relevance_score, 2),
             resumen_generado=result.resumen_generado,
             titular_traducido=result.titular_traducido,
-            tags=result.tags,
+            tags=[],
             en_alcance=False,
         )
     return result
