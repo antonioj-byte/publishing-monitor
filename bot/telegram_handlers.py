@@ -22,7 +22,9 @@ from bot.pipeline_status import (
     format_estado_text,
     format_muestra_text,
 )
-from bot.report_parser import parse_command_args, parse_free_text
+from bot.report_parser import parse_command_args
+from bot.request_intent import UserRequest, informal_ack, parse_user_request
+from bot.voice_transcribe import VoiceTranscriptionError, transcribe_voice_bytes
 from bot.github_pr import format_latest_pr_line
 from bot.reclassify_service import run_backfill_tags, run_reclassify_all
 from bot.restart_service import detect_restart_method, restart_bot, restart_method_hint
@@ -42,11 +44,74 @@ from reports.session import load_session
 
 logger = logging.getLogger(__name__)
 
-_MORE_TEXT = re.compile(
-    r"^(?:/informe_mas|informe\s+mas|informe\s+más|más\s+informaci[oó]n|"
-    r"mas\s+informaci[oó]n|continuar|sigue|siguiente)\s*$",
-    re.IGNORECASE,
-)
+
+async def _dispatch_user_request(
+    update: Update,
+    request: UserRequest,
+    *,
+    status_message: str | None = None,
+) -> None:
+    if request.kind == "unknown":
+        if update.message:
+            await update.message.reply_text(informal_ack(request))
+        return
+    if request.kind == "continuation":
+        if status_message and update.message:
+            await update.message.reply_text(status_message)
+        await _send_continuation(update)
+        return
+    if request.kind == "hoy":
+        await _send_report(
+            update,
+            mode="informe_hoy",
+            record=False,
+            status_message=status_message or informal_ack(request),
+        )
+        return
+    if request.kind == "daily":
+        await _send_report(
+            update,
+            mode="informe",
+            record=True,
+            status_message=status_message or informal_ack(request),
+        )
+        return
+    if request.kind == "filtered" and request.filter:
+        report_filter = _filter_from_parsed(request.filter)
+        await _send_report(
+            update,
+            mode="informe_pais",
+            record=False,
+            report_filter=report_filter,
+            status_message=status_message or informal_ack(request),
+        )
+
+
+async def _handle_natural_language(
+    update: Update,
+    text: str,
+    *,
+    heard_from_voice: bool = False,
+) -> None:
+    if not update.message:
+        return
+    if not is_authorized(update):
+        return
+
+    request = parse_user_request(text)
+    if request.kind == "unknown":
+        if heard_from_voice:
+            await update.message.reply_text(
+                f"He oído: «{text}»\n"
+                "No lo he interpretado como informe. Prueba algo como "
+                "«informe de ficción de la semana» o «qué hay hoy»."
+            )
+        return
+
+    prefix = informal_ack(request)
+    if heard_from_voice:
+        prefix = f"He oído: «{text}»\n{prefix}"
+    await _dispatch_user_request(update, request, status_message=prefix)
 
 
 def _filter_from_parsed(parsed) -> ReportFilter:
@@ -101,8 +166,9 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
         "/reiniciar — reiniciar el bot\n\n"
         "Los informes tienen un máximo de ~2.500 palabras.\n"
         "Si hay más contenido, usa /informe_mas.\n\n"
-        "También en texto libre:\n"
-        "«informe últimos 7 días ficción en alemania»"
+        "También en texto libre o **nota de voz** (habla normal, sin comandos):\n"
+        "«dame ficción de la semana» · «informe de hoy» · "
+        "«qué hay de literatura local»"
     )
 
 
@@ -540,25 +606,38 @@ async def informe_mas_command(update: Update, context: ContextTypes.DEFAULT_TYPE
 async def free_text_report(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     if not update.message or not update.message.text:
         return
+    await _handle_natural_language(update, update.message.text.strip())
+
+
+async def voice_report(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    if not update.message or not update.message.voice:
+        return
     if not is_authorized(update):
+        await update.message.reply_text(
+            unauthorized_message(update.effective_chat.id if update.effective_chat else "?")
+        )
         return
 
-    text = update.message.text.strip()
-    if _MORE_TEXT.match(text):
-        await _send_continuation(update)
-        return
-
+    await update.message.reply_text("Un momento, escucho tu audio…")
+    voice = update.message.voice
     try:
-        parsed = parse_free_text(text)
-    except ValueError as exc:
+        tg_file = await context.bot.get_file(voice.file_id)
+        buffer = BytesIO()
+        await tg_file.download_to_memory(out=buffer)
+        transcript = await asyncio.to_thread(
+            transcribe_voice_bytes,
+            buffer.getvalue(),
+            mime_type="audio/ogg",
+        )
+    except VoiceTranscriptionError as exc:
         await update.message.reply_text(str(exc))
         return
-
-    if not parsed:
+    except Exception as exc:
+        logger.exception("Voice report failed")
+        await update.message.reply_text(f"No pude procesar el audio: {exc}")
         return
 
-    report_filter = _filter_from_parsed(parsed)
-    await _send_report(update, mode="informe_pais", record=False, report_filter=report_filter)
+    await _handle_natural_language(update, transcript, heard_from_voice=True)
 
 
 async def _reply_report_chunk(message, chunk: str) -> None:
@@ -619,6 +698,7 @@ async def _send_report(
     report_filter: ReportFilter | None = None,
     *,
     markdown_only: bool = False,
+    status_message: str | None = None,
 ) -> None:
     if not update.message or not update.effective_chat:
         return
@@ -630,11 +710,14 @@ async def _send_report(
         return
 
     chat_id = str(update.effective_chat.id)
-    label = "Markdown" if markdown_only else "informe"
-    if settings.classify_before_telegram_report:
-        status = f"Clasificando y generando {label}{_filter_label(report_filter)}…"
+    if status_message:
+        status = status_message
     else:
-        status = f"Generando {label}{_filter_label(report_filter)}…"
+        label = "Markdown" if markdown_only else "informe"
+        if settings.classify_before_telegram_report:
+            status = f"Clasificando y generando {label}{_filter_label(report_filter)}…"
+        else:
+            status = f"Generando {label}{_filter_label(report_filter)}…"
     await update.message.reply_text(status)
 
     classify_cap = 1 if settings.classify_before_telegram_report else None
