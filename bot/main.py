@@ -296,7 +296,8 @@ async def main_async() -> None:
         scheduler = setup_scheduler(app)
         app.bot_data["scheduler"] = scheduler
         scheduler.start()
-        asyncio.create_task(_prewarm_embeddings_background())
+        if settings.prewarm_embeddings_on_start:
+            asyncio.create_task(_prewarm_embeddings_background())
         asyncio.create_task(_heartbeat_loop())
 
         try:
