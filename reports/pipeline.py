@@ -23,7 +23,7 @@ logger = logging.getLogger(__name__)
 
 _BATCH_SIZE = 20
 _MAX_BATCHES = 60
-_TELEGRAM_CLASSIFY_CAP = 1
+_FILTERED_CLASSIFY_BATCH_CAP = 5  # up to 100 articles per país/tag/hoy informe
 
 
 def _pending_in_window(
@@ -78,6 +78,14 @@ def _max_classify_batches(pending: int) -> int:
     return min(_MAX_BATCHES, needed)
 
 
+def _batches_for_filtered_pending(pending: int) -> int:
+    """Batches needed to classify all pending in a país/tag/hoy window (capped)."""
+    if pending <= 0:
+        return 0
+    needed = (pending + _BATCH_SIZE - 1) // _BATCH_SIZE
+    return min(needed, _FILTERED_CLASSIFY_BATCH_CAP)
+
+
 def _should_classify_for_filter(mode: str, report_filter: ReportFilter | None) -> bool:
     if mode == "informe_hoy":
         return True
@@ -118,9 +126,8 @@ def build_editorial_report(
             if max_classify_batches is not None:
                 max_batches = min(max_batches, max_classify_batches)
         elif pending > 0 and _should_classify_for_filter(resolved_mode, report_filter):
-            # Fast default for /informe, but classify one batch for país/tag/hoy
-            # so filtered reports are not empty while articles wait in queue.
-            max_batches = 1
+            # Any país/región/tag/hoy: classify all pending in window (not just 1 batch).
+            max_batches = _batches_for_filtered_pending(pending)
             if max_classify_batches is not None:
                 max_batches = min(max_batches, max_classify_batches)
         else:
