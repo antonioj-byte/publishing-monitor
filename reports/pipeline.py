@@ -78,6 +78,14 @@ def _max_classify_batches(pending: int) -> int:
     return min(_MAX_BATCHES, needed)
 
 
+def _should_classify_for_filter(mode: str, report_filter: ReportFilter | None) -> bool:
+    if mode == "informe_hoy":
+        return True
+    if not report_filter:
+        return False
+    return bool(report_filter.pais or report_filter.region or report_filter.tags)
+
+
 def build_editorial_report(
     mode: str = "informe",
     report_filter: ReportFilter | None = None,
@@ -96,7 +104,7 @@ def build_editorial_report(
 
     Skips classification only for /informe_mas continuations.
     """
-    if classify_before_report and continuation is None:
+    if continuation is None:
         since, _, resolved_mode = _resolve_window(mode, report_filter)
         use_pub_date = resolved_mode in ("informe_pais", "informe_hoy")
         pending = _pending_in_window(
@@ -105,9 +113,18 @@ def build_editorial_report(
             date_by_publication=use_pub_date,
             mode=resolved_mode,
         )
-        max_batches = _max_classify_batches(pending)
-        if max_classify_batches is not None:
-            max_batches = min(max_batches, max_classify_batches)
+        if classify_before_report:
+            max_batches = _max_classify_batches(pending)
+            if max_classify_batches is not None:
+                max_batches = min(max_batches, max_classify_batches)
+        elif pending > 0 and _should_classify_for_filter(resolved_mode, report_filter):
+            # Fast default for /informe, but classify one batch for país/tag/hoy
+            # so filtered reports are not empty while articles wait in queue.
+            max_batches = 1
+            if max_classify_batches is not None:
+                max_batches = min(max_batches, max_classify_batches)
+        else:
+            max_batches = 0
         if max_batches > 0:
             stats = classify_all_pending(
                 report_filter=report_filter,

@@ -28,6 +28,11 @@ from reports.report_modes import ReportMode
 
 logger = logging.getLogger(__name__)
 
+_PENDING_CLASSIFY_HINT = (
+    "Ejecuta `/reclasificar` (o espera al cron de clasificación, minuto :15 de cada franja). "
+    "Luego repite el informe."
+)
+
 CATEGORY_HEADERS: dict[Categoria, str] = {
     "ideas": "📚 Ideas del mundo editorial",
     "noticias": "📰 Noticias del mundo editorial",
@@ -377,7 +382,7 @@ def _empty_tag_message(
     elif pending:
         lines.append(
             f"Hay {pending} artículo(s) sin clasificar en este periodo. "
-            "Vuelve a pedir el informe en 1-2 minutos. Si persiste, /retag."
+            f"{_PENDING_CLASSIFY_HINT}"
         )
     elif in_window and not with_tag:
         lines.append(
@@ -480,7 +485,8 @@ def _empty_today_message(since: datetime) -> str:
         lines.extend(
             [
                 "",
-                "Hay artículos de hoy sin clasificar. Repite `/informe_hoy` en 1-2 minutos.",
+                "Hay artículos de hoy sin clasificar. "
+                f"{_PENDING_CLASSIFY_HINT}",
             ]
         )
     elif stats["low_score"] and not stats["relevant"]:
@@ -526,8 +532,7 @@ def _empty_country_message(
     if pending:
         lines.append(
             f"Hay {pending} artículo(s) de {label} sin clasificar en este periodo. "
-            "Vuelve a pedir el informe en 1-2 minutos (el bot los procesa al generarlo). "
-            "Si persiste, ejecuta /retag."
+            f"{_PENDING_CLASSIFY_HINT}"
         )
         if report_filter.days and report_filter.days < 7:
             lines.append(
