@@ -1,10 +1,11 @@
-"""Parse Telegram report requests (days + country/region + one tag)."""
+"""Parse Telegram report requests (days + country/region + medio + one tag)."""
 
 from __future__ import annotations
 
 import re
 from dataclasses import dataclass
 
+from reports.medios_lookup import extract_medio_from_text
 from reports.paises import MAX_REPORT_DAYS, resolve_location
 from reports.tags import extract_tags_from_text, resolve_tag, tag_labels
 
@@ -17,6 +18,7 @@ class ParsedReportRequest:
     pais: str | None
     region: str | None
     location_label: str | None
+    medio_nombre: str | None
     tags: list[str]
     tag_labels: list[str]
 
@@ -29,21 +31,23 @@ def _clamp_days(days: int) -> int:
     return days
 
 
-def _resolve_location_and_tags(blob: str) -> tuple[list[str], list[str], str | None, str | None, str | None]:
-    tags, remainder = extract_tags_from_text(blob)
-    # Un solo tag por informe
+def _resolve_filters_from_blob(
+    blob: str,
+) -> tuple[str | None, list[str], list[str], str | None, str | None, str | None]:
+    """Resolve medio, one tag, and optional location from free text."""
+    medio, remainder = extract_medio_from_text(blob)
+    tags, remainder = extract_tags_from_text(remainder)
     tags = tags[:1]
     labels = tag_labels(tags)
     remainder = re.sub(r"^(?:en|de)\s+", "", remainder, flags=re.IGNORECASE).strip()
+    pais = region = label = None
     if remainder:
         pais, region, label = resolve_location(remainder)
-    else:
-        pais, region, label = None, None, None
-    return tags, labels, pais, region, label
+    return medio, tags, labels, pais, region, label
 
 
-def _parse_tokens(args: list[str]) -> tuple[int | None, list[str], list[str], str | None, str | None, str | None]:
-    """Parse mixed-order tokens: days, one tag, optional location."""
+def _parse_tokens(args: list[str]) -> tuple[int | None, list[str], list[str], str | None, str | None, str | None, str | None]:
+    """Parse mixed-order tokens: days, one tag, optional medio/location."""
     days: int | None = None
     tag: str | None = None
     location_parts: list[str] = []
@@ -70,13 +74,24 @@ def _parse_tokens(args: list[str]) -> tuple[int | None, list[str], list[str], st
             labels = tag_labels(tags)
             blob = remainder.strip()
 
+    medio = None
+    if blob:
+        medio, blob = extract_medio_from_text(blob)
+
+    if blob and not tags:
+        found, remainder = extract_tags_from_text(blob)
+        if found:
+            tags = [found[0]]
+            labels = tag_labels(tags)
+            blob = remainder.strip()
+
     pais = region = label = None
     if blob:
         blob = re.sub(r"^(?:en|de)\s+", "", blob, flags=re.IGNORECASE).strip()
         if blob:
             pais, region, label = resolve_location(blob)
 
-    return days, tags, labels, pais, region, label
+    return days, tags, labels, pais, region, label, medio
 
 
 def _build_request(
@@ -87,12 +102,13 @@ def _build_request(
     pais: str | None,
     region: str | None,
     label: str | None,
+    medio_nombre: str | None,
 ) -> ParsedReportRequest:
-    if not tags and not pais and not region and days is None:
+    if not tags and not pais and not region and not medio_nombre and days is None:
         raise ValueError(
-            "Indica al menos un filtro: días, país/región o tag.\n"
-            "Ejemplos: /informe 7 ficcion · /informe alemania · /informe 14\n"
-            "Ver filtros: /tags"
+            "Indica al menos un filtro: días, país/región, medio o tag.\n"
+            "Ejemplos: /informe 7 ficcion · /informe alemania · /informe 7 les inrocks\n"
+            "Ver filtros: /tags · /medios"
         )
     effective_days = _clamp_days(days if days is not None else DEFAULT_FILTER_DAYS)
     return ParsedReportRequest(
@@ -100,6 +116,7 @@ def _build_request(
         pais=pais,
         region=region,
         location_label=label,
+        medio_nombre=medio_nombre,
         tags=tags,
         tag_labels=labels,
     )
@@ -111,12 +128,13 @@ def parse_command_args(args: list[str]) -> ParsedReportRequest | None:
     /informe 7 ficcion
     /informe ficcion 7 alemania
     /informe alemania
+    /informe 7 les inrocks
     /informe 7
     """
     if not args:
         return None
 
-    days, tags, labels, pais, region, label = _parse_tokens(args)
+    days, tags, labels, pais, region, label, medio = _parse_tokens(args)
     return _build_request(
         days=days,
         tags=tags,
@@ -124,6 +142,7 @@ def parse_command_args(args: list[str]) -> ParsedReportRequest | None:
         pais=pais,
         region=region,
         label=label,
+        medio_nombre=medio,
     )
 
 
@@ -162,7 +181,7 @@ def parse_free_text(text: str) -> ParsedReportRequest | None:
         else:
             days = int(match.group(1))
             blob = match.group(2).strip().rstrip("?.!")
-        tags, labels, pais, region, label = _resolve_location_and_tags(blob)
+        medio, tags, labels, pais, region, label = _resolve_filters_from_blob(blob)
         try:
             return _build_request(
                 days=days,
@@ -171,6 +190,7 @@ def parse_free_text(text: str) -> ParsedReportRequest | None:
                 pais=pais,
                 region=region,
                 label=label,
+                medio_nombre=medio,
             )
         except ValueError:
             continue

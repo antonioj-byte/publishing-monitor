@@ -14,6 +14,7 @@ from db.models import ReportFilter
 from medios_tiers import TIER1_ALL
 from reports.generator import (
     _count_country_candidates,
+    _count_medio_candidates,
     _count_tag_candidates,
     _fetch_articles,
     _resolve_window,
@@ -193,7 +194,12 @@ def format_estado_text() -> str:
 
 def format_diagnostico_text(report_filter: ReportFilter | None) -> str:
     init_schema()
-    if report_filter and (report_filter.tags or report_filter.pais or report_filter.region):
+    if report_filter and (
+        report_filter.tags
+        or report_filter.pais
+        or report_filter.region
+        or report_filter.medio_nombre
+    ):
         return _format_filtered_diagnostico(report_filter)
     return _format_default_diagnostico()
 
@@ -249,7 +255,16 @@ def _format_filtered_diagnostico(report_filter: ReportFilter) -> str:
     since, include_sent, mode = _resolve_window("informe_pais", report_filter)
     use_pub_date = mode in ("informe_pais", "informe_hoy")
 
-    if report_filter.tags and not report_filter.pais and not report_filter.region:
+    if report_filter.medio_nombre:
+        in_window, pending, total_medio = _count_medio_candidates(
+            report_filter, since, date_by_publication=use_pub_date
+        )
+        header = f"Diagnóstico medio: {report_filter.medio_nombre} ({report_filter.days} días)"
+        stage1 = in_window
+        missing_tags = 0
+        with_tag = total_medio
+        stats_kind = "medio"
+    elif report_filter.tags and not report_filter.pais and not report_filter.region:
         tag_label = ", ".join(report_filter.tag_labels or report_filter.tags or [])
         with_tag, in_window, missing_tags, pending = _count_tag_candidates(
             report_filter,
@@ -259,6 +274,7 @@ def _format_filtered_diagnostico(report_filter: ReportFilter) -> str:
         )
         header = f"Diagnóstico tag: {tag_label} ({report_filter.days} días)"
         stage1 = with_tag
+        stats_kind = "tag"
     else:
         in_window, pending, total_geo = _count_country_candidates(
             report_filter, since, date_by_publication=use_pub_date
@@ -267,6 +283,7 @@ def _format_filtered_diagnostico(report_filter: ReportFilter) -> str:
         stage1 = in_window
         missing_tags = 0
         with_tag = total_geo
+        stats_kind = "country"
 
     articles = _fetch_articles(
         since,
@@ -284,13 +301,21 @@ def _format_filtered_diagnostico(report_filter: ReportFilter) -> str:
         f"Filtro fecha: {'publicación' if use_pub_date else 'ingesta'}",
     ]
 
-    if report_filter.tags and not report_filter.pais and not report_filter.region:
+    if stats_kind == "tag":
         lines.extend(
             [
                 f"Con tag en ventana: {with_tag}",
                 f"Clasificados en ventana: {in_window}",
                 f"Sin tags (procesados): {missing_tags}",
                 f"Pendientes clasificar: {pending}",
+            ]
+        )
+    elif stats_kind == "medio":
+        lines.extend(
+            [
+                f"Artículos del medio: {with_tag}",
+                f"  clasificados en ventana: {in_window}",
+                f"  pendientes clasificar: {pending}",
             ]
         )
     else:

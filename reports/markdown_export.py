@@ -101,6 +101,8 @@ def _report_title(
         return f"Informe de hoy — {date_str}"
     if mode == "informe_pais" and report_filter:
         parts: list[str] = []
+        if report_filter.medio_nombre:
+            parts.append(report_filter.medio_nombre)
         if report_filter.location_label:
             parts.append(report_filter.location_label)
         if report_filter.tag_labels:
@@ -152,6 +154,10 @@ def markdown_filename(
 ) -> str:
     now = now or datetime.now(ZoneInfo(settings.timezone))
     slug_parts = ["informe"]
+    if report_filter and report_filter.medio_nombre:
+        slug_parts.append(
+            re.sub(r"[^a-z0-9]+", "-", report_filter.medio_nombre.lower()).strip("-")
+        )
     if report_filter and report_filter.tags:
         slug_parts.append(report_filter.tags[0])
     if report_filter and report_filter.pais:

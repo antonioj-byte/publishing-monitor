@@ -155,6 +155,58 @@ def _count_country_candidates(
     return in_window, pending, total_geo
 
 
+def _count_medio_candidates(
+    report_filter: ReportFilter,
+    since: datetime,
+    *,
+    date_by_publication: bool,
+    strict_publication: bool = False,
+) -> tuple[int, int, int]:
+    """Return (classified relevant in window, pending, total for medio)."""
+    since_iso = publication_since_iso(since)
+    if date_by_publication and strict_publication:
+        date_expr = "a.fecha_publicacion"
+        pub_filter = "AND a.fecha_publicacion IS NOT NULL AND a.fecha_publicacion != ''"
+    elif date_by_publication:
+        date_expr = "COALESCE(NULLIF(a.fecha_publicacion, ''), a.fecha_ingesta)"
+        pub_filter = ""
+    else:
+        date_expr = "a.fecha_ingesta"
+        pub_filter = ""
+    medio = report_filter.medio_nombre
+
+    with get_connection() as conn:
+        in_window = conn.execute(
+            f"""
+            SELECT COUNT(*) FROM articulos a
+            JOIN medios m ON m.id = a.medio_id
+            WHERE m.nombre = ? AND a.procesado = 1 AND a.relevance_score >= ?
+              {pub_filter}
+              AND {date_expr} >= ?
+            """,
+            (medio, settings.min_relevance_score, since_iso),
+        ).fetchone()[0]
+        pending = conn.execute(
+            f"""
+            SELECT COUNT(*) FROM articulos a
+            JOIN medios m ON m.id = a.medio_id
+            WHERE m.nombre = ? AND a.procesado = 0
+              {pub_filter}
+              AND {date_expr} >= ?
+            """,
+            (medio, since_iso),
+        ).fetchone()[0]
+        total_medio = conn.execute(
+            """
+            SELECT COUNT(*) FROM articulos a
+            JOIN medios m ON m.id = a.medio_id
+            WHERE m.nombre = ?
+            """,
+            (medio,),
+        ).fetchone()[0]
+    return in_window, pending, total_medio
+
+
 def _article_has_tags(raw_tags: str, wanted: set[str]) -> bool:
     try:
         tags = json.loads(raw_tags)
@@ -208,6 +260,9 @@ def _fetch_sql_rows(
         elif report_filter.region:
             query += " AND m.region = ?"
             params.append(report_filter.region)
+        if report_filter.medio_nombre:
+            query += " AND m.nombre = ?"
+            params.append(report_filter.medio_nombre)
         if apply_tags and report_filter.tags:
             placeholders = ",".join("?" * len(report_filter.tags))
             query += f"""
@@ -398,6 +453,70 @@ def _empty_tag_message(
         lines.append(
             "Prueba un periodo más amplio o revisa con "
             "`python3 scripts/diagnose_pipeline.py 7 ficcion`."
+        )
+    return "\n".join(lines)
+
+
+def _empty_medio_message(
+    report_filter: ReportFilter,
+    since: datetime,
+    *,
+    date_by_publication: bool,
+    strict_publication: bool = False,
+) -> str:
+    in_window, pending, total_medio = _count_medio_candidates(
+        report_filter,
+        since,
+        date_by_publication=date_by_publication,
+        strict_publication=strict_publication,
+    )
+    label = report_filter.medio_nombre or "el medio"
+    lines = [
+        f"<i>No hay artículos editoriales de {esc(label)} "
+        f"en los últimos {report_filter.days} días.</i>",
+        "",
+        f"En base de datos: {total_medio} artículos de {label}, "
+        f"{in_window} clasificados en ventana, {pending} pendientes de clasificar.",
+    ]
+    if pending:
+        lines.append(
+            f"Hay {pending} artículo(s) de {label} sin clasificar en este periodo. "
+            f"{_PENDING_CLASSIFY_HINT}"
+        )
+        if report_filter.days and report_filter.days < 7:
+            slug = label.lower().replace(" ", " ")
+            lines.append(f"Prueba un periodo más amplio: `/informe 7 {slug}`.")
+    elif total_medio == 0:
+        lines.append(
+            "No hay artículos ingeridos de ese medio. Revisa `/medios` "
+            "o ejecuta `python3 scripts/run_ingest_once.py`."
+        )
+    elif in_window:
+        diag = _diagnose_empty_fetch(
+            since,
+            include_sent=True,
+            report_filter=report_filter,
+            date_by_publication=date_by_publication,
+            strict_publication=strict_publication,
+        )
+        if report_filter.tags and diag["blocked_tags"]:
+            lines.append(
+                f"{diag['blocked_tags']} artículo(s) en ventana no tienen el tag pedido."
+            )
+        elif diag["blocked_keyword"]:
+            lines.append(
+                "Hay artículos clasificados en ventana, pero el filtro editorial "
+                "los descartó."
+            )
+        else:
+            lines.append(
+                "Hay artículos clasificados en ventana, pero fueron "
+                "descartados por priorización o ya enviados."
+            )
+    else:
+        lines.append(
+            "Prueba un periodo más amplio o revisa con "
+            f"`/diagnostico 7 {label.lower()}`."
         )
     return "\n".join(lines)
 
@@ -634,6 +753,9 @@ def _fetch_articles(
         elif report_filter.region:
             query += " AND m.region = ?"
             params.append(report_filter.region)
+        if report_filter.medio_nombre:
+            query += " AND m.nombre = ?"
+            params.append(report_filter.medio_nombre)
         if report_filter.tags:
             placeholders = ",".join("?" * len(report_filter.tags))
             query += f"""
@@ -684,7 +806,12 @@ def _is_catalog_report(report_filter: ReportFilter | None, mode: str) -> bool:
     days = report_filter.days or 0
     if days <= 1:
         return False
-    return bool(report_filter.tags or report_filter.pais or report_filter.region)
+    return bool(
+        report_filter.tags
+        or report_filter.pais
+        or report_filter.region
+        or report_filter.medio_nombre
+    )
 
 
 def _order_catalog_articles(articles: list[dict]) -> list[dict]:
@@ -871,7 +998,12 @@ def _header_lines(mode: str, report_filter: ReportFilter | None, now: datetime) 
         tag_part = ", ".join(report_filter.tag_labels)
 
     if mode == "informe_pais" and report_filter:
-        if report_filter.location_label:
+        if report_filter.medio_nombre:
+            title = (
+                f"📋 Informe — {report_filter.medio_nombre} "
+                f"(últimos {report_filter.days} días)"
+            )
+        elif report_filter.location_label:
             title = (
                 f"📋 Informe — {report_filter.location_label} "
                 f"(últimos {report_filter.days} días)"
@@ -880,8 +1012,12 @@ def _header_lines(mode: str, report_filter: ReportFilter | None, now: datetime) 
             title = f"📋 Informe — {tag_part} (últimos {report_filter.days} días)"
         else:
             title = f"📋 Informe (últimos {report_filter.days} días)"
-        if tag_part and report_filter.location_label:
+        if tag_part and (
+            report_filter.location_label or report_filter.medio_nombre
+        ):
             title += f" · {tag_part}"
+        elif tag_part and not report_filter.medio_nombre and not report_filter.location_label:
+            pass
         lines = [f"{title} — {date_str}"]
     elif mode == "informe_hoy":
         lines = [
@@ -1064,9 +1200,18 @@ def build_report(
             lines = _header_lines(mode, report_filter, now)
             lines.append("")
             if mode == "informe_pais" and report_filter:
-                if report_filter.tags and not report_filter.pais and not report_filter.region:
+                if report_filter.tags and not report_filter.pais and not report_filter.region and not report_filter.medio_nombre:
                     lines.append(
                         _empty_tag_message(
+                            report_filter,
+                            since,
+                            date_by_publication=use_pub_date,
+                            strict_publication=strict_publication,
+                        )
+                    )
+                elif report_filter.medio_nombre:
+                    lines.append(
+                        _empty_medio_message(
                             report_filter,
                             since,
                             date_by_publication=use_pub_date,

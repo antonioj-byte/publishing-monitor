@@ -17,6 +17,7 @@ from bot.auth import is_authorized, unauthorized_message
 from bot.config import settings
 from bot.db_export import export_database_bytes
 from bot.filters_info import list_available_filters
+from reports.medios_lookup import list_available_medios
 from bot.pipeline_status import (
     format_diagnostico_text,
     format_estado_text,
@@ -120,6 +121,7 @@ def _filter_from_parsed(parsed) -> ReportFilter:
         pais=parsed.pais,
         region=parsed.region,
         location_label=parsed.location_label,
+        medio_nombre=parsed.medio_nombre,
         tags=parsed.tags or None,
         tag_labels=parsed.tag_labels or None,
     )
@@ -129,6 +131,8 @@ def _filter_label(report_filter: ReportFilter | None) -> str:
     if not report_filter:
         return ""
     parts: list[str] = []
+    if report_filter.medio_nombre:
+        parts.append(report_filter.medio_nombre)
     if report_filter.location_label:
         parts.append(report_filter.location_label)
     if report_filter.tag_labels:
@@ -151,7 +155,7 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
         "Comandos:\n"
         "/ping — comprobar latencia\n"
         "/informe — informe diario (desde último cierre)\n"
-        "/informe <filtros> — ej. /informe 7 ficcion · /informe alemania · /informe 14\n"
+        "/informe <filtros> — ej. /informe 7 ficcion · /informe alemania · /informe 7 les inrocks\n"
         "/informe_hoy — publicados hoy en web\n"
         "/informe_mas — continuar el informe anterior\n"
         "/informe_md — descargar informe en Markdown (.md)\n"
@@ -161,6 +165,7 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
         "/muestra — últimos artículos clasificados (/muestra ruido)\n"
         "/diagnostico — por qué un informe sale vacío\n"
         "/tags — tags editoriales y países disponibles\n"
+        "/medios — medios disponibles para filtrar informes\n"
         "/reclasificar — reclasificar artículos sin tags\n"
         "/reclasificar todo — reclasificar todos desde cero\n"
         "/reiniciar — reiniciar el bot\n\n"
@@ -463,6 +468,18 @@ async def tags_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
 
 async def paises_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     await filtros_command(update, context)
+
+
+async def medios_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    if not update.message:
+        return
+    if not is_authorized(update):
+        await update.message.reply_text(
+            unauthorized_message(update.effective_chat.id if update.effective_chat else "?")
+        )
+        return
+    for chunk in split_message(list_available_medios()):
+        await update.message.reply_text(chunk, disable_web_page_preview=True)
 
 
 async def tag_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:

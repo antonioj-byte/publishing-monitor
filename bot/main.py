@@ -31,6 +31,7 @@ from bot.telegram_handlers import (
     estado_command,
     diagnostico_command,
     muestra_command,
+    medios_command,
     paises_command,
     ping_command,
     reclasificar_command,
@@ -234,6 +235,7 @@ def build_application() -> Application:
     app.add_handler(CommandHandler("diagnostico", diagnostico_command))
     app.add_handler(CommandHandler("muestra", muestra_command))
     app.add_handler(CommandHandler("paises", paises_command))
+    app.add_handler(CommandHandler("medios", medios_command))
     app.add_handler(CommandHandler("tags", tags_command))
     app.add_handler(CommandHandler("tag", tag_command))
     app.add_handler(CommandHandler("reclasificar", reclasificar_command))
