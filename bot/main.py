@@ -44,11 +44,12 @@ from bot.telegram_handlers import (
     voice_report,
 )
 from bot.version import BOT_VERSION
-from db.connection import init_schema
-from ingest.runner import ingest_all
+from db.connection import get_connection, init_schema
+from ingest.runner import ingest_all, ingest_medio_by_id
 from reports.generator import mark_articles_sent, record_informe, split_message
 from reports.pipeline import build_editorial_report
 from reports.prioritize import _compute_embeddings
+from scripts.load_medios import load_medios
 from reports.session import load_session
 
 logging.basicConfig(
@@ -62,6 +63,38 @@ _JOB_DEFAULTS = {
     "coalesce": True,
     "misfire_grace_time": 300,
 }
+
+
+def _sync_medios_from_csv() -> list[str]:
+    """Apply medios.csv to SQLite (idempotent). Returns names of newly inserted medios."""
+    stats = load_medios()
+    inserted = stats.get("inserted_names") or []
+    if stats.get("inserted") or stats.get("updated"):
+        logger.info(
+            "Medios sync from CSV: inserted=%s updated=%s",
+            stats.get("inserted"),
+            stats.get("updated"),
+        )
+    return list(inserted)
+
+
+async def _ingest_new_medios(names: list[str]) -> None:
+    if not names:
+        return
+    logger.info("Ingesting %d newly synced medio(s): %s", len(names), ", ".join(names))
+    with get_connection() as conn:
+        rows = conn.execute(
+            "SELECT id, nombre FROM medios WHERE nombre IN ({})".format(
+                ",".join("?" * len(names))
+            ),
+            names,
+        ).fetchall()
+    for row in rows:
+        try:
+            stats = await asyncio.to_thread(ingest_medio_by_id, row["id"])
+            logger.info("%s: ingest +%d (skipped %d)", row["nombre"], stats.inserted, stats.skipped)
+        except Exception:
+            logger.exception("Failed ingesting new medio %s", row["nombre"])
 
 
 async def job_ingest() -> None:
@@ -255,6 +288,7 @@ def build_application() -> Application:
 async def main_async() -> None:
     started = time.monotonic()
     init_schema()
+    new_medios = await asyncio.to_thread(_sync_medios_from_csv)
     app = build_application()
 
     logger.info("Bot starting (timezone=%s, chat_id=%s)", settings.timezone, settings.telegram_chat_id)
@@ -300,6 +334,8 @@ async def main_async() -> None:
         scheduler = setup_scheduler(app)
         app.bot_data["scheduler"] = scheduler
         scheduler.start()
+        if new_medios:
+            asyncio.create_task(_ingest_new_medios(new_medios))
         if settings.prewarm_embeddings_on_start:
             asyncio.create_task(_prewarm_embeddings_background())
         asyncio.create_task(_heartbeat_loop())
