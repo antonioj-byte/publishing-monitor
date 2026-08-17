@@ -80,6 +80,36 @@ class ReportParserTagTests(unittest.TestCase):
         self.assertIn("ficcion", parsed.tags)
         self.assertEqual(parsed.pais, "de")
 
+    def test_informe_medio_only_defaults_days(self) -> None:
+        parsed = parse_command_args(["les", "inrocks"])
+        assert parsed is not None
+        self.assertEqual(parsed.days, DEFAULT_FILTER_DAYS)
+        self.assertEqual(parsed.medio_nombre, "Les Inrocks")
+        self.assertIsNone(parsed.pais)
+
+    def test_informe_medio_with_days(self) -> None:
+        parsed = parse_command_args(["7", "les", "inrocks"])
+        assert parsed is not None
+        self.assertEqual(parsed.days, 7)
+        self.assertEqual(parsed.medio_nombre, "Les Inrocks")
+
+    def test_informe_medio_and_tag(self) -> None:
+        parsed = parse_command_args(["7", "les", "inrocks", "ficcion"])
+        assert parsed is not None
+        self.assertEqual(parsed.medio_nombre, "Les Inrocks")
+        self.assertEqual(parsed.tags, ["ficcion"])
+
+    def test_informe_le_monde_livres(self) -> None:
+        parsed = parse_command_args(["le", "monde", "livres"])
+        assert parsed is not None
+        self.assertEqual(parsed.medio_nombre, "Le Monde Livres")
+
+    def test_free_text_medio(self) -> None:
+        parsed = parse_free_text("informe últimos 7 días les inrocks")
+        assert parsed is not None
+        self.assertEqual(parsed.medio_nombre, "Les Inrocks")
+        self.assertEqual(parsed.days, 7)
+
 
 if __name__ == "__main__":
     unittest.main()

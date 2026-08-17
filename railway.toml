@@ -5,4 +5,4 @@ dockerfilePath = "Dockerfile"
 [deploy]
 restartPolicyType = "ON_FAILURE"
 restartPolicyMaxRetries = 10
-# Redeploy trigger: classify all pending for any país/tag informe — 2026-08-16
+# Redeploy trigger: informe por medio — 2026-08-17

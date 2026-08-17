@@ -14,6 +14,8 @@ class FiltersInfoTests(unittest.TestCase):
         self.assertIn("Países con medios", text)
         self.assertIn("ficcion", text)
         self.assertIn("/informe 7 ficcion", text)
+        self.assertIn("/medios", text)
+        self.assertIn("les inrocks", text)
         self.assertNotIn("/tag ", text)
         self.assertNotIn("/paises", text)
 

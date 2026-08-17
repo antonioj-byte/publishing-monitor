@@ -13,6 +13,7 @@ from reports.dates import publication_since_iso
 from reports.generator import (
     ReportResult,
     _count_country_candidates,
+    _count_medio_candidates,
     _count_tag_candidates,
     _resolve_window,
     build_report,
@@ -54,6 +55,13 @@ def _pending_in_window(
                 """,
                 (since_iso,),
             ).fetchone()[0]
+    if report_filter and report_filter.medio_nombre:
+        _, pending, _ = _count_medio_candidates(
+            report_filter,
+            since,
+            date_by_publication=date_by_publication,
+        )
+        return pending
     if report_filter and (report_filter.pais or report_filter.region):
         _, pending, _ = _count_country_candidates(
             report_filter,
@@ -91,7 +99,12 @@ def _should_classify_for_filter(mode: str, report_filter: ReportFilter | None) -
         return True
     if not report_filter:
         return False
-    return bool(report_filter.pais or report_filter.region or report_filter.tags)
+    return bool(
+        report_filter.pais
+        or report_filter.region
+        or report_filter.tags
+        or report_filter.medio_nombre
+    )
 
 
 def build_editorial_report(

@@ -192,6 +192,9 @@ def classify_pending(
     elif report_filter and report_filter.region:
         conditions.append("m.region = ?")
         params.append(report_filter.region)
+    if report_filter and report_filter.medio_nombre:
+        conditions.append("m.nombre = ?")
+        params.append(report_filter.medio_nombre)
     where_clause = " AND ".join(conditions)
 
     with get_connection() as conn:

@@ -122,6 +122,8 @@ def informal_ack(request: UserRequest) -> str:
         return "Genial, te preparo el informe del día…"
     if request.kind == "filtered" and request.filter:
         bits: list[str] = []
+        if request.filter.medio_nombre:
+            bits.append(request.filter.medio_nombre)
         if request.filter.tag_labels:
             bits.append(request.filter.tag_labels[0].lower())
         if request.filter.location_label:

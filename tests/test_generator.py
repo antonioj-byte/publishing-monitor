@@ -91,6 +91,12 @@ class ReportLimitTests(unittest.TestCase):
         self.assertTrue(_is_catalog_report(tag_filter, "informe_pais"))
         self.assertFalse(_is_catalog_report(tag_filter, "informe"))
         self.assertFalse(_is_catalog_report(ReportFilter(days=1, tags=["ficcion"]), "informe_pais"))
+        self.assertTrue(
+            _is_catalog_report(
+                ReportFilter(days=7, medio_nombre="Les Inrocks"),
+                "informe_pais",
+            )
+        )
 
     def test_catalog_order_keeps_all_articles_not_one_per_event(self) -> None:
         articles = [
