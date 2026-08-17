@@ -1,7 +1,7 @@
 """Deployed bot version string (shown in /ping and logs)."""
 
-BOT_VERSION = "2026-08-17-informe-por-medio"
+BOT_VERSION = "2026-08-17-fix-medio-sync"
 
 # Fallback when GitHub API is unavailable (update on each deploy PR).
-LAST_PR_NUMBER = 49
-LAST_PR_TITLE = "Clasificar todos los pendientes en informes filtrados por país/tag"
+LAST_PR_NUMBER = 50
+LAST_PR_TITLE = "Informe por medio: filtrar informes por outlet (Les Inrocks, Le Monde…)"

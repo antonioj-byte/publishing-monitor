@@ -16,6 +16,7 @@ from db.connection import get_connection
 from db.models import Categoria, ReportFilter
 from medios_tiers import get_tier
 from reports.dates import publication_since_iso, publication_within_window
+from reports.medios_lookup import lookup_medio_id
 from reports.session import ReportSession, save_session
 from reports.telegram_format import esc, format_article_entry
 from reports.prioritize import (
@@ -464,6 +465,19 @@ def _empty_medio_message(
     date_by_publication: bool,
     strict_publication: bool = False,
 ) -> str:
+    label = report_filter.medio_nombre or "el medio"
+    if not lookup_medio_id(label):
+        return "\n".join(
+            [
+                f"<i>No hay artículos de {esc(label)} en la base de datos.</i>",
+                "",
+                "El medio está en el catálogo (medios.csv) pero aún no se ha "
+                "sincronizado con la BD de producción.",
+                "Tras el redeploy el bot lo registra e ingiere artículos al arrancar; "
+                "vuelve a pedir el informe en 2-3 minutos.",
+            ]
+        )
+
     in_window, pending, total_medio = _count_medio_candidates(
         report_filter,
         since,

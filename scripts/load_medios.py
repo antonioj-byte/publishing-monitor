@@ -51,7 +51,7 @@ def load_medios(csv_path: Path | None = None) -> dict[str, int]:
         raise FileNotFoundError(f"CSV not found: {path}")
 
     init_schema()
-    stats = {"inserted": 0, "updated": 0, "skipped": 0}
+    stats: dict[str, int | list[str]] = {"inserted": 0, "updated": 0, "skipped": 0, "inserted_names": []}
 
     with get_connection() as conn:
         with path.open(encoding="utf-8") as f:
@@ -111,6 +111,9 @@ def load_medios(csv_path: Path | None = None) -> dict[str, int]:
                         (nombre, *values),
                     )
                     stats["inserted"] += 1
+                    inserted_names = stats["inserted_names"]
+                    assert isinstance(inserted_names, list)
+                    inserted_names.append(nombre)
 
         conn.commit()
 
