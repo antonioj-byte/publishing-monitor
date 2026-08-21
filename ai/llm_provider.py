@@ -10,6 +10,8 @@ from __future__ import annotations
 import logging
 from typing import Protocol
 
+from ai.usage_tracking import record_llm_call
+
 logger = logging.getLogger(__name__)
 
 _GEMINI_CLIENT = None
@@ -111,6 +113,14 @@ class GeminiProvider:
                 text = (response.text or "").strip()
                 if not text:
                     raise RuntimeError("Gemini devolvió respuesta vacía")
+                record_llm_call(
+                    operation="classify",
+                    provider="gemini",
+                    model=model,
+                    response=response,
+                    prompt_text=f"{system_prompt}\n{user_msg}",
+                    output_text=text,
+                )
                 return text
             except Exception as exc:
                 mapped = self._classify_error(exc)
@@ -201,6 +211,14 @@ class AnthropicProvider:
                     messages=[{"role": "user", "content": user_msg}],
                 )
                 block = next(b for b in response.content if b.type == "text")
+                record_llm_call(
+                    operation="classify",
+                    provider="anthropic",
+                    model=model,
+                    response=response,
+                    prompt_text=f"{system_prompt}\n{user_msg}",
+                    output_text=block.text,
+                )
                 return block.text
             except anthropic.NotFoundError as exc:
                 last_error = exc

@@ -1,7 +1,7 @@
 """Deployed bot version string (shown in /ping and logs)."""
 
-BOT_VERSION = "2026-08-21-gemini-quota-original-fallback"
+BOT_VERSION = "2026-08-21-gasto-api-command"
 
 # Fallback when GitHub API is unavailable (update on each deploy PR).
-LAST_PR_NUMBER = 51
-LAST_PR_TITLE = "Fix: sincronizar medios.csv en cada arranque (Les Inrocks sin artículos)"
+LAST_PR_NUMBER = 52
+LAST_PR_TITLE = "Fallback lengua original cuando se agotan créditos Gemini"
