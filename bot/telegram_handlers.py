@@ -29,7 +29,7 @@ from bot.voice_transcribe import VoiceTranscriptionError, transcribe_voice_bytes
 from bot.github_pr import format_latest_pr_line
 from bot.reclassify_service import run_backfill_tags, run_reclassify_all
 from bot.restart_service import detect_restart_method, restart_bot, restart_method_hint
-from ai.classify import active_model, active_provider
+from ai.classify import active_model, active_provider, api_failure_hint
 from ai.llm_provider import get_provider
 from ai.usage_tracking import format_gasto_text
 from bot.version import BOT_VERSION
@@ -102,12 +102,13 @@ async def _handle_natural_language(
 
     request = parse_user_request(text)
     if request.kind == "unknown":
-        if heard_from_voice:
-            await update.message.reply_text(
-                f"He oído: «{text}»\n"
-                "No lo he interpretado como informe. Prueba algo como "
-                "«informe de ficción de la semana» o «qué hay hoy»."
-            )
+        hint = (
+            f"He oído: «{text}»\n" if heard_from_voice else ""
+        ) + (
+            "No lo he interpretado como informe. Prueba algo como "
+            "«informe de ficción de la semana», «qué hay hoy» o /informe 7 ficcion."
+        )
+        await update.message.reply_text(hint)
         return
 
     prefix = informal_ack(request)
@@ -188,10 +189,11 @@ async def ping_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
         )
         return
     pr_line = await asyncio.to_thread(format_latest_pr_line)
+    api_hint = api_failure_hint()
     await update.message.reply_text(
         f"pong — bot operativo (v{BOT_VERSION})\n"
         f"{pr_line}\n"
-        f"Clasificación: {active_provider()} ({active_model()})"
+        f"Clasificación: {active_provider()} ({active_model()}){api_hint}"
     )
 
 

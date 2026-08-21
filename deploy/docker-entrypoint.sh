@@ -5,11 +5,8 @@ set -euo pipefail
 cd /app
 mkdir -p /app/data
 
-if [[ ! -f /app/data/editorial.db ]]; then
-  echo "→ Primera arrancada: inicializando base de datos..."
-  python3 scripts/init_db.py
-  echo "→ Base de datos lista. La ingesta arranca con el scheduler del bot."
-fi
+echo "→ Inicializando esquema SQLite (idempotente)..."
+python3 -c "from db.connection import init_schema; init_schema()"
 
 echo "→ Sincronizando medios.csv con la base de datos..."
 python3 scripts/load_medios.py

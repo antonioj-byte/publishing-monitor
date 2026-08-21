@@ -1,7 +1,7 @@
 """Deployed bot version string (shown in /ping and logs)."""
 
-BOT_VERSION = "2026-08-21-gasto-api-command"
+BOT_VERSION = "2026-08-21-project-audit"
 
 # Fallback when GitHub API is unavailable (update on each deploy PR).
-LAST_PR_NUMBER = 52
-LAST_PR_TITLE = "Fallback lengua original cuando se agotan créditos Gemini"
+LAST_PR_NUMBER = 53
+LAST_PR_TITLE = "Comando /gasto para coste API estimado"
