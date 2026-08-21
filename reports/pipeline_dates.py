@@ -25,7 +25,12 @@ def pending_date_sql(
             f"{alias}.fecha_publicacion",
             f"AND {alias}.fecha_publicacion IS NOT NULL AND {alias}.fecha_publicacion != ''",
         )
+    # Catalog (/informe N país|tag): en ventana si publicación O ingesta recientes
+    # (MAX evita excluir artículos con fecha RSS antigua pero ingeridos esta semana).
     return (
-        f"COALESCE(NULLIF({alias}.fecha_publicacion, ''), {alias}.fecha_ingesta)",
+        (
+            f"MAX(COALESCE(NULLIF({alias}.fecha_publicacion, ''), '1970-01-01'), "
+            f"{alias}.fecha_ingesta)"
+        ),
         "",
     )
