@@ -31,6 +31,7 @@ from bot.reclassify_service import run_backfill_tags, run_reclassify_all
 from bot.restart_service import detect_restart_method, restart_bot, restart_method_hint
 from ai.classify import active_model, active_provider
 from ai.llm_provider import get_provider
+from ai.usage_tracking import format_gasto_text
 from bot.version import BOT_VERSION
 from db.models import ReportFilter
 from reports.generator import (
@@ -162,6 +163,7 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
         "/descargar — Markdown del último informe generado\n"
         "/descargar_db — descargar la base de datos SQLite (.db)\n"
         "/estado — resumen de la base de datos\n"
+        "/gasto — gasto API estimado del bot (/gasto 7 · /gasto 90)\n"
         "/muestra — últimos artículos clasificados (/muestra ruido)\n"
         "/diagnostico — por qué un informe sale vacío\n"
         "/tags — tags editoriales y países disponibles\n"
@@ -211,6 +213,27 @@ async def estado_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
         logger.exception("estado failed")
         text = f"Error en /estado: {exc}"
     await update.message.reply_text(text)
+
+
+async def gasto_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    if not update.message:
+        return
+    if not is_authorized(update):
+        await update.message.reply_text(
+            unauthorized_message(update.effective_chat.id if update.effective_chat else "?")
+        )
+        return
+    days = 30
+    for arg in context.args or []:
+        if arg.isdigit():
+            days = max(1, min(365, int(arg)))
+            break
+    try:
+        text = await asyncio.to_thread(format_gasto_text, days=days)
+    except Exception as exc:
+        logger.exception("gasto failed")
+        text = f"Error en /gasto: {exc}"
+    await update.message.reply_text(text, disable_web_page_preview=True)
 
 
 async def diagnostico_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:

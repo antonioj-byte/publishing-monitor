@@ -26,7 +26,7 @@ class LatestPrTests(unittest.TestCase):
     def test_format_latest_pr_line_fallback_to_version(self) -> None:
         with patch.object(github_pr, "get_latest_merged_pr", return_value=None):
             line = github_pr.format_latest_pr_line()
-        self.assertIn("#51", line)
+        self.assertIn("#52", line)
         self.assertIn("medio", line.lower())
 
     def test_fetch_picks_first_merged_pull(self) -> None:

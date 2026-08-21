@@ -53,6 +53,28 @@ def _migrate_schema(conn: sqlite3.Connection) -> None:
             """
         )
 
+    if "api_usage_events" not in tables:
+        conn.execute(
+            """
+            CREATE TABLE api_usage_events (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                created_at TEXT NOT NULL DEFAULT (datetime('now')),
+                operation TEXT NOT NULL,
+                provider TEXT NOT NULL,
+                model TEXT,
+                input_tokens INTEGER NOT NULL DEFAULT 0,
+                output_tokens INTEGER NOT NULL DEFAULT 0,
+                estimated_usd REAL NOT NULL DEFAULT 0
+            )
+            """
+        )
+        conn.execute(
+            """
+            CREATE INDEX IF NOT EXISTS idx_api_usage_created
+            ON api_usage_events (created_at DESC)
+            """
+        )
+
 
 def init_schema() -> None:
     schema_path = Path(__file__).parent / "schema.sql"

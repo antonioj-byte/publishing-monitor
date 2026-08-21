@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import logging
 
+from ai.usage_tracking import record_llm_call
 from bot.config import settings
 
 logger = logging.getLogger(__name__)
@@ -50,4 +51,11 @@ def transcribe_voice_bytes(audio_bytes: bytes, *, mime_type: str = "audio/ogg") 
     text = (response.text or "").strip()
     if not text:
         raise VoiceTranscriptionError("La transcripción salió vacía. ¿Se oía bien el audio?")
+    record_llm_call(
+        operation="voice",
+        provider="gemini",
+        model=model,
+        response=response,
+        output_text=text,
+    )
     return text

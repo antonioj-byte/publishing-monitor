@@ -5,4 +5,4 @@ dockerfilePath = "Dockerfile"
 [deploy]
 restartPolicyType = "ON_FAILURE"
 restartPolicyMaxRetries = 10
-# Redeploy trigger: gemini quota original-language fallback — 2026-08-21
+# Redeploy trigger: /gasto API cost command — 2026-08-21
