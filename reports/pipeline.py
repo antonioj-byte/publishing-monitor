@@ -18,6 +18,7 @@ from reports.generator import (
     _resolve_window,
     build_report,
 )
+from reports.pipeline_dates import date_flags_for_mode, pending_date_sql
 from reports.session import ReportSession
 
 logger = logging.getLogger(__name__)
@@ -25,6 +26,7 @@ logger = logging.getLogger(__name__)
 _BATCH_SIZE = 20
 _MAX_BATCHES = 60
 _FILTERED_CLASSIFY_BATCH_CAP = 5  # up to 100 articles per país/tag/hoy informe
+_DAILY_CLASSIFY_BATCH_CAP = 5  # up to 100 articles for /informe diario (fast path)
 
 
 def _pending_in_window(
@@ -32,34 +34,33 @@ def _pending_in_window(
     since: datetime,
     *,
     date_by_publication: bool,
+    strict_publication: bool = False,
     mode: str = "informe",
 ) -> int:
     since_iso = publication_since_iso(since)
-    if mode == "informe_hoy":
+    date_expr, pub_filter = pending_date_sql(
+        date_by_publication=date_by_publication,
+        strict_publication=strict_publication,
+    )
+
+    if mode == "informe_hoy" or (mode == "informe" and not report_filter):
         with get_connection() as conn:
             return conn.execute(
-                """
-                SELECT COUNT(*) FROM articulos
-                WHERE procesado = 0
-                  AND fecha_publicacion IS NOT NULL AND fecha_publicacion != ''
-                  AND fecha_publicacion >= ?
+                f"""
+                SELECT COUNT(*) FROM articulos a
+                WHERE a.procesado = 0
+                  {pub_filter}
+                  AND {date_expr} >= ?
                 """,
                 (since_iso,),
             ).fetchone()[0]
-    if mode == "informe" and not report_filter:
-        with get_connection() as conn:
-            return conn.execute(
-                """
-                SELECT COUNT(*) FROM articulos
-                WHERE procesado = 0 AND fecha_ingesta >= ?
-                """,
-                (since_iso,),
-            ).fetchone()[0]
+
     if report_filter and report_filter.medio_nombre:
         _, pending, _ = _count_medio_candidates(
             report_filter,
             since,
             date_by_publication=date_by_publication,
+            strict_publication=strict_publication,
         )
         return pending
     if report_filter and (report_filter.pais or report_filter.region):
@@ -67,6 +68,7 @@ def _pending_in_window(
             report_filter,
             since,
             date_by_publication=date_by_publication,
+            strict_publication=strict_publication,
         )
         return pending
     if report_filter and report_filter.tags:
@@ -74,6 +76,7 @@ def _pending_in_window(
             report_filter,
             since,
             date_by_publication=date_by_publication,
+            strict_publication=strict_publication,
         )
         return pending
     return 0
@@ -92,6 +95,13 @@ def _batches_for_filtered_pending(pending: int) -> int:
         return 0
     needed = (pending + _BATCH_SIZE - 1) // _BATCH_SIZE
     return min(needed, _FILTERED_CLASSIFY_BATCH_CAP)
+
+
+def _batches_for_daily_pending(pending: int) -> int:
+    if pending <= 0:
+        return 0
+    needed = (pending + _BATCH_SIZE - 1) // _BATCH_SIZE
+    return min(needed, _DAILY_CLASSIFY_BATCH_CAP)
 
 
 def _should_classify_for_filter(mode: str, report_filter: ReportFilter | None) -> bool:
@@ -127,11 +137,12 @@ def build_editorial_report(
     """
     if continuation is None:
         since, _, resolved_mode = _resolve_window(mode, report_filter)
-        use_pub_date = resolved_mode in ("informe_pais", "informe_hoy")
+        use_pub_date, strict_pub = date_flags_for_mode(resolved_mode)
         pending = _pending_in_window(
             report_filter,
             since,
             date_by_publication=use_pub_date,
+            strict_publication=strict_pub,
             mode=resolved_mode,
         )
         if classify_before_report:
@@ -139,7 +150,6 @@ def build_editorial_report(
             if max_classify_batches is not None:
                 max_batches = min(max_batches, max_classify_batches)
         elif pending > 0 and _should_classify_for_filter(resolved_mode, report_filter):
-            # Any país/región/tag/hoy: classify all pending in window (not just 1 batch).
             max_batches = _batches_for_filtered_pending(pending)
             if max_classify_batches is not None:
                 max_batches = min(max_batches, max_classify_batches)
@@ -150,6 +160,7 @@ def build_editorial_report(
                 report_filter=report_filter,
                 since_iso=since.astimezone(ZoneInfo("UTC")).isoformat(),
                 date_by_publication=use_pub_date,
+                strict_publication_date=strict_pub,
                 batch_size=_BATCH_SIZE,
                 max_batches=max_batches,
             )
@@ -178,3 +189,34 @@ def build_editorial_report(
         len(report.article_ids),
     )
     return report
+
+
+def classify_pending_for_daily_report(*, max_batches: int = 5) -> dict[str, int]:
+    """Classify pending articles in the daily informe window (cierre / informe automático)."""
+    since, _, resolved_mode = _resolve_window("informe", None)
+    use_pub_date, strict_pub = date_flags_for_mode(resolved_mode)
+    pending = _pending_in_window(
+        None,
+        since,
+        date_by_publication=use_pub_date,
+        strict_publication=strict_pub,
+        mode=resolved_mode,
+    )
+    batches = min(_batches_for_daily_pending(pending), max(0, max_batches))
+    if batches <= 0:
+        return {"classified": 0, "failed": 0, "remaining": pending, "batches": 0}
+    stats = classify_all_pending(
+        since_iso=since.astimezone(ZoneInfo("UTC")).isoformat(),
+        date_by_publication=use_pub_date,
+        strict_publication_date=strict_pub,
+        batch_size=_BATCH_SIZE,
+        max_batches=batches,
+    )
+    logger.info(
+        "Daily window classify: pending=%d batches=%d classified=%d remaining=%d",
+        pending,
+        batches,
+        stats["classified"],
+        stats["remaining"],
+    )
+    return stats

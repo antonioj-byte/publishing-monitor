@@ -41,8 +41,16 @@ def _seed_db(conn: sqlite3.Connection) -> None:
             enviado INTEGER NOT NULL DEFAULT 0,
             tags TEXT
         );
+        CREATE TABLE IF NOT EXISTS informes (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            fecha_cierre TEXT NOT NULL,
+            tipo TEXT NOT NULL,
+            articulos_incluidos TEXT NOT NULL,
+            enviado_at TEXT NOT NULL DEFAULT (datetime('now'))
+        );
         DELETE FROM articulos;
         DELETE FROM medios;
+        DELETE FROM informes;
         """
     )
     conn.execute(
@@ -78,12 +86,15 @@ class PipelineStatusTests(unittest.TestCase):
         cm.__enter__.return_value = self.conn
         cm.__exit__.return_value = False
         self._conn_patch = patch("bot.pipeline_status.get_connection", return_value=cm)
+        self._gen_conn_patch = patch("reports.generator.get_connection", return_value=cm)
         self._init_patch = patch("bot.pipeline_status.init_schema")
         self._conn_patch.start()
+        self._gen_conn_patch.start()
         self._init_patch.start()
 
     def tearDown(self) -> None:
         self._init_patch.stop()
+        self._gen_conn_patch.stop()
         self._conn_patch.stop()
         self.conn.close()
 

@@ -19,6 +19,7 @@ from reports.generator import (
     _fetch_articles,
     _resolve_window,
 )
+from reports.pipeline_dates import date_flags_for_mode, pending_date_sql
 from reports.prioritize import limit_batch_for_prioritization, prioritize_articles
 from reports.tags import tag_labels
 
@@ -207,26 +208,41 @@ def format_diagnostico_text(report_filter: ReportFilter | None) -> str:
 def _format_default_diagnostico() -> str:
     stats = collect_overview_stats()
     since, _, mode = _resolve_window("informe", None)
+    use_pub_date, strict_pub = date_flags_for_mode(mode)
     since_iso = since.astimezone(ZoneInfo("UTC")).isoformat()
+    date_expr, pub_filter = pending_date_sql(
+        date_by_publication=use_pub_date,
+        strict_publication=strict_pub,
+    )
 
     with get_connection() as conn:
         raw = conn.execute(
-            """
+            f"""
             SELECT COUNT(*) FROM articulos a
             WHERE a.procesado = 1 AND a.relevance_score >= ?
-              AND a.fecha_ingesta >= ? AND a.enviado = 0
+              {pub_filter}
+              AND {date_expr} >= ? AND a.enviado = 0
             """,
             (settings.min_relevance_score, since_iso),
         ).fetchone()[0]
 
-    articles = _fetch_articles(since, include_sent=False)
+    articles = _fetch_articles(
+        since,
+        include_sent=False,
+        date_by_publication=use_pub_date,
+        strict_publication=strict_pub,
+    )
     batch, _total = limit_batch_for_prioritization(articles)
     result = prioritize_articles(batch)
 
+    date_label = "publicación (estricta)" if strict_pub else (
+        "publicación" if use_pub_date else "ingesta"
+    )
     lines = [
         "Diagnóstico del informe diario",
         "",
         f"Ventana ({mode}): desde {since.isoformat()}",
+        f"Filtro fecha: {date_label}",
         f"Artículos totales: {stats.total}",
         f"  pendientes: {stats.pending}",
         f"  con tags: {stats.with_tags}",
@@ -253,11 +269,14 @@ def _format_default_diagnostico() -> str:
 
 def _format_filtered_diagnostico(report_filter: ReportFilter) -> str:
     since, include_sent, mode = _resolve_window("informe_pais", report_filter)
-    use_pub_date = mode in ("informe_pais", "informe_hoy")
+    use_pub_date, strict_pub = date_flags_for_mode(mode)
 
     if report_filter.medio_nombre:
         in_window, pending, total_medio = _count_medio_candidates(
-            report_filter, since, date_by_publication=use_pub_date
+            report_filter,
+            since,
+            date_by_publication=use_pub_date,
+            strict_publication=strict_pub,
         )
         header = f"Diagnóstico medio: {report_filter.medio_nombre} ({report_filter.days} días)"
         stage1 = in_window
@@ -270,14 +289,17 @@ def _format_filtered_diagnostico(report_filter: ReportFilter) -> str:
             report_filter,
             since,
             date_by_publication=use_pub_date,
-            strict_publication=False,
+            strict_publication=strict_pub,
         )
         header = f"Diagnóstico tag: {tag_label} ({report_filter.days} días)"
         stage1 = with_tag
         stats_kind = "tag"
     else:
         in_window, pending, total_geo = _count_country_candidates(
-            report_filter, since, date_by_publication=use_pub_date
+            report_filter,
+            since,
+            date_by_publication=use_pub_date,
+            strict_publication=strict_pub,
         )
         header = f"Diagnóstico país: {report_filter.location_label} ({report_filter.days} días)"
         stage1 = in_window
@@ -290,6 +312,7 @@ def _format_filtered_diagnostico(report_filter: ReportFilter) -> str:
         include_sent=include_sent,
         report_filter=report_filter,
         date_by_publication=use_pub_date,
+        strict_publication=strict_pub,
     )
     batch, _total = limit_batch_for_prioritization(articles)
     result = prioritize_articles(batch)
@@ -298,7 +321,7 @@ def _format_filtered_diagnostico(report_filter: ReportFilter) -> str:
         header,
         "",
         f"Ventana desde: {since.isoformat()}",
-        f"Filtro fecha: {'publicación' if use_pub_date else 'ingesta'}",
+        f"Filtro fecha: {'publicación (estricta)' if strict_pub else ('publicación' if use_pub_date else 'ingesta')}",
     ]
 
     if stats_kind == "tag":

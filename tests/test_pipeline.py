@@ -5,6 +5,7 @@ from __future__ import annotations
 import unittest
 
 from reports.pipeline import (
+    _batches_for_daily_pending,
     _batches_for_filtered_pending,
     _max_classify_batches,
     _should_classify_for_filter,
@@ -47,6 +48,12 @@ class PipelineBatchTests(unittest.TestCase):
         self.assertEqual(_batches_for_filtered_pending(21), 2)
         self.assertEqual(_batches_for_filtered_pending(100), 5)
         self.assertEqual(_batches_for_filtered_pending(200), 5)
+
+    def test_batches_for_daily_pending_caps_at_five(self) -> None:
+        self.assertEqual(_batches_for_daily_pending(0), 0)
+        self.assertEqual(_batches_for_daily_pending(20), 1)
+        self.assertEqual(_batches_for_daily_pending(100), 5)
+        self.assertEqual(_batches_for_daily_pending(500), 5)
 
 
 if __name__ == "__main__":

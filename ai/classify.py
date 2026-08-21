@@ -49,10 +49,22 @@ def active_model() -> str:
     return get_provider(settings).primary_model
 
 
-def reset_api_auth_state() -> None:
+def api_failure_hint() -> str:
+    """Short status line for /ping when the LLM API is in sticky fallback mode."""
+    if not _API_AUTH_FAILED:
+        return ""
+    reason = _API_FAILURE_REASON or "offline"
+    return f" ⚠️ API en fallback ({reason}) — recarga créditos y /reiniciar."
+
+
+def _clear_api_failure_state() -> None:
     global _API_AUTH_FAILED, _API_FAILURE_REASON
     _API_AUTH_FAILED = False
     _API_FAILURE_REASON = None
+
+
+def reset_api_auth_state() -> None:
+    _clear_api_failure_state()
 
 
 def verify_classify_api() -> None:
@@ -190,11 +202,13 @@ def classify_article(
     system_prompt = load_system_prompt()
     try:
         raw = provider.generate_json(system_prompt=system_prompt, user_msg=user_msg)
-        return finalize_result(
+        result = finalize_result(
             titulo=titulo,
             resumen=resumen,
             result=parse_response(raw),
         )
+        _clear_api_failure_state()
+        return result
     except LLMQuotaError as exc:
         _API_AUTH_FAILED = True
         _API_FAILURE_REASON = "quota"
@@ -221,6 +235,42 @@ def classify_article(
             idioma=idioma,
             reason="auth",
         )
+    except (json.JSONDecodeError, ValueError, KeyError, RuntimeError) as exc:
+        logger.warning("Classification parse/model error: %s", exc)
+        if not allow_offline:
+            raise
+        return classify_offline(
+            titulo=titulo,
+            resumen=resumen,
+            categoria_default=categoria_default,
+            idioma=idioma,
+            reason="parse",
+        )
+
+
+def _date_filter_sql(
+    *,
+    since_iso: str | None,
+    date_by_publication: bool,
+    strict_publication_date: bool,
+) -> tuple[list[str], list[object]]:
+    conditions: list[str] = []
+    params: list[object] = []
+    if not since_iso:
+        return conditions, params
+    if date_by_publication and strict_publication_date:
+        conditions.append(
+            "a.fecha_publicacion IS NOT NULL AND a.fecha_publicacion != ''"
+        )
+        conditions.append("a.fecha_publicacion >= ?")
+    elif date_by_publication:
+        conditions.append(
+            "COALESCE(NULLIF(a.fecha_publicacion, ''), a.fecha_ingesta) >= ?"
+        )
+    else:
+        conditions.append("a.fecha_ingesta >= ?")
+    params.append(since_iso)
+    return conditions, params
 
 
 def classify_pending(
@@ -230,20 +280,20 @@ def classify_pending(
     report_filter: ReportFilter | None = None,
     since_iso: str | None = None,
     date_by_publication: bool = False,
+    strict_publication_date: bool = False,
     require_tags: bool = False,
 ) -> dict[str, int]:
     stats = {"classified": 0, "failed": 0, "remaining": 0, "no_tags": 0}
     use_api = _has_classify_api()
     conditions = ["a.procesado = 0"]
     params: list[object] = []
-    if since_iso:
-        date_col = (
-            "COALESCE(NULLIF(a.fecha_publicacion, ''), a.fecha_ingesta)"
-            if date_by_publication
-            else "a.fecha_ingesta"
-        )
-        conditions.append(f"{date_col} >= ?")
-        params.append(since_iso)
+    date_conds, date_params = _date_filter_sql(
+        since_iso=since_iso,
+        date_by_publication=date_by_publication,
+        strict_publication_date=strict_publication_date,
+    )
+    conditions.extend(date_conds)
+    params.extend(date_params)
     if report_filter and report_filter.pais:
         conditions.append("m.pais = ?")
         params.append(report_filter.pais)
@@ -270,24 +320,25 @@ def classify_pending(
             (*params, limit),
         ).fetchall()
 
-        for i, row in enumerate(rows):
-            if use_api and not _API_AUTH_FAILED and i > 0 and delay_seconds > 0:
-                time.sleep(delay_seconds)
-            try:
-                result = classify_article(
-                    titulo=row["titulo_original"],
-                    resumen=row["resumen_raw"],
-                    medio=row["medio_nombre"],
-                    categoria_default=row["categoria_default"],
-                    idioma=row["idioma"],
-                    medio_tier=get_tier(row["medio_nombre"], row["categoria_default"]),
-                    fecha_publicacion=row["fecha_publicacion"],
-                    allow_offline=not require_tags,
-                )
-                if require_tags and not result.tags:
-                    stats["no_tags"] += 1
-                    stats["failed"] += 1
-                    continue
+    for i, row in enumerate(rows):
+        if use_api and not _API_AUTH_FAILED and i > 0 and delay_seconds > 0:
+            time.sleep(delay_seconds)
+        try:
+            result = classify_article(
+                titulo=row["titulo_original"],
+                resumen=row["resumen_raw"],
+                medio=row["medio_nombre"],
+                categoria_default=row["categoria_default"],
+                idioma=row["idioma"],
+                medio_tier=get_tier(row["medio_nombre"], row["categoria_default"]),
+                fecha_publicacion=row["fecha_publicacion"],
+                allow_offline=not require_tags,
+            )
+            if require_tags and not result.tags:
+                stats["no_tags"] += 1
+                stats["failed"] += 1
+                continue
+            with get_connection() as conn:
                 conn.execute(
                     """
                     UPDATE articulos SET
@@ -309,11 +360,12 @@ def classify_pending(
                     ),
                 )
                 conn.commit()
-                stats["classified"] += 1
-            except Exception:
-                logger.exception("Failed classifying article %s", row["id"])
-                stats["failed"] += 1
+            stats["classified"] += 1
+        except Exception:
+            logger.exception("Failed classifying article %s", row["id"])
+            stats["failed"] += 1
 
+    with get_connection() as conn:
         remaining = conn.execute(
             f"""
             SELECT COUNT(*) FROM articulos a
@@ -322,7 +374,7 @@ def classify_pending(
             """,
             params,
         ).fetchone()[0]
-        stats["remaining"] = remaining
+    stats["remaining"] = remaining
 
     return stats
 
@@ -335,9 +387,11 @@ def classify_all_pending(
     report_filter: ReportFilter | None = None,
     since_iso: str | None = None,
     date_by_publication: bool = False,
+    strict_publication_date: bool = False,
 ) -> dict[str, int]:
     """Classify all pending articles in batches (for informe / cierre)."""
     totals = {"classified": 0, "failed": 0, "remaining": 0, "batches": 0}
+    idle_batches = 0
     for _ in range(max_batches):
         stats = classify_pending(
             limit=batch_size,
@@ -345,11 +399,18 @@ def classify_all_pending(
             report_filter=report_filter,
             since_iso=since_iso,
             date_by_publication=date_by_publication,
+            strict_publication_date=strict_publication_date,
         )
         totals["batches"] += 1
         totals["classified"] += stats["classified"]
         totals["failed"] += stats["failed"]
         totals["remaining"] = stats["remaining"]
-        if stats["classified"] == 0 or stats["remaining"] == 0:
+        if stats["remaining"] == 0:
             break
+        if stats["classified"] == 0:
+            idle_batches += 1
+            if idle_batches >= 2:
+                break
+        else:
+            idle_batches = 0
     return totals
