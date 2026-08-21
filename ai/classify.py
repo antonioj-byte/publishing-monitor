@@ -22,6 +22,7 @@ from bot.config import settings
 from db.connection import get_connection
 from db.models import Categoria, ReportFilter
 from medios_tiers import get_tier
+from reports.pipeline_dates import pending_date_sql
 
 logger = logging.getLogger(__name__)
 
@@ -258,17 +259,13 @@ def _date_filter_sql(
     params: list[object] = []
     if not since_iso:
         return conditions, params
-    if date_by_publication and strict_publication_date:
-        conditions.append(
-            "a.fecha_publicacion IS NOT NULL AND a.fecha_publicacion != ''"
-        )
-        conditions.append("a.fecha_publicacion >= ?")
-    elif date_by_publication:
-        conditions.append(
-            "COALESCE(NULLIF(a.fecha_publicacion, ''), a.fecha_ingesta) >= ?"
-        )
-    else:
-        conditions.append("a.fecha_ingesta >= ?")
+    date_expr, pub_filter = pending_date_sql(
+        date_by_publication=date_by_publication,
+        strict_publication=strict_publication_date,
+    )
+    if pub_filter:
+        conditions.append(pub_filter.removeprefix("AND ").strip())
+    conditions.append(f"{date_expr} >= ?")
     params.append(since_iso)
     return conditions, params
 

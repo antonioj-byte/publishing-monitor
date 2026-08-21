@@ -193,6 +193,80 @@ class PublicationDateTests(unittest.TestCase):
 
         self.assertEqual([item["id"] for item in articles], [2])
 
+    def test_catalog_fetch_includes_recent_ingest_with_old_publication(self) -> None:
+        with TemporaryDirectory() as temp_dir:
+            db_path = Path(temp_dir) / "test.db"
+            conn = sqlite3.connect(db_path)
+            conn.executescript(
+                """
+                CREATE TABLE medios (
+                    id INTEGER PRIMARY KEY,
+                    nombre TEXT,
+                    region TEXT,
+                    pais TEXT,
+                    tier INTEGER
+                );
+                CREATE TABLE articulos (
+                    id INTEGER PRIMARY KEY,
+                    medio_id INTEGER,
+                    titulo_original TEXT,
+                    titular_traducido TEXT,
+                    resumen_generado TEXT,
+                    resumen_raw TEXT,
+                    idioma TEXT,
+                    url TEXT,
+                    categoria TEXT,
+                    relevance_score INTEGER,
+                    fecha_publicacion TEXT,
+                    fecha_ingesta TEXT,
+                    procesado INTEGER,
+                    enviado INTEGER,
+                    tags TEXT
+                );
+                INSERT INTO medios VALUES (1, 'Globe', 'ca', 'ca', 2);
+                INSERT INTO articulos VALUES (
+                    1, 1, 'Old pub new ingest', 'Old pub new ingest', 'Summary', 'Summary', 'en',
+                    'https://example.com/ca1', 'noticias', 4,
+                    '2026-01-01T10:00:00+00:00', '2026-08-18T10:00:00+00:00', 1, 0, NULL
+                );
+                INSERT INTO articulos VALUES (
+                    2, 1, 'Too old both', 'Too old both', 'Summary', 'Summary', 'en',
+                    'https://example.com/ca2', 'noticias', 4,
+                    '2026-01-01T10:00:00+00:00', '2026-01-02T10:00:00+00:00', 1, 0, NULL
+                );
+                """
+            )
+            conn.commit()
+            conn.close()
+
+            @contextmanager
+            def test_connection():
+                test_conn = sqlite3.connect(db_path)
+                test_conn.row_factory = sqlite3.Row
+                try:
+                    yield test_conn
+                finally:
+                    test_conn.close()
+
+            since = catalog_window_start(
+                7, datetime(2026, 8, 21, 11, 35, tzinfo=ZoneInfo("Europe/Madrid"))
+            )
+            with (
+                patch("reports.generator.get_connection", test_connection),
+                patch("reports.generator.filter_editorial_scope", lambda rows: rows),
+                patch("reports.generator.apply_keyword_scope_filter", lambda rows: rows),
+                patch("reports.generator.get_tier", lambda _name: 2),
+            ):
+                articles = _fetch_articles(
+                    since,
+                    include_sent=True,
+                    report_filter=ReportFilter(days=7, pais="ca", location_label="Canadá"),
+                    date_by_publication=True,
+                    strict_publication=False,
+                )
+
+        self.assertEqual([item["id"] for item in articles], [1])
+
 
 class TelegramFormatTests(unittest.TestCase):
     def test_headline_is_bold_without_tier(self) -> None:

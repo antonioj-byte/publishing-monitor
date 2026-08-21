@@ -26,6 +26,15 @@ class PipelineDatesTests(unittest.TestCase):
         self.assertIn("fecha_publicacion", expr)
         self.assertIn("IS NOT NULL", extra)
 
+    def test_catalog_uses_max_of_publication_and_ingesta(self) -> None:
+        expr, extra = pending_date_sql(
+            date_by_publication=True,
+            strict_publication=False,
+        )
+        self.assertIn("MAX(", expr)
+        self.assertIn("fecha_ingesta", expr)
+        self.assertEqual(extra, "")
+
     def test_ingesta_mode(self) -> None:
         expr, extra = pending_date_sql(
             date_by_publication=False,

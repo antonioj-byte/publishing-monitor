@@ -16,6 +16,7 @@ from db.connection import get_connection
 from db.models import Categoria, ReportFilter
 from medios_tiers import get_tier
 from reports.dates import catalog_window_start, publication_since_iso, publication_within_window
+from reports.pipeline_dates import pending_date_sql
 from reports.medios_lookup import lookup_medio_id
 from reports.session import ReportSession, save_session
 from reports.telegram_format import esc, format_article_entry
@@ -33,6 +34,22 @@ _PENDING_CLASSIFY_HINT = (
     "Ejecuta `/reclasificar` (o espera al cron de clasificación, minuto :15 de cada franja). "
     "Luego repite el informe."
 )
+
+
+def _format_window_start(since: datetime) -> str:
+    return since.astimezone(ZoneInfo(settings.timezone)).strftime("%d/%m/%Y")
+
+
+def _wider_period_hint(days: int | None, label: str) -> str:
+    slug = label.lower()
+    current = days or 7
+    if current >= 30:
+        return f"Prueba otro filtro o `/diagnostico {current} {slug}`."
+    if current >= 14:
+        return f"Prueba un periodo más amplio: `/informe 30 {slug}`."
+    if current >= 7:
+        return f"Prueba un periodo más amplio: `/informe 14 {slug}`."
+    return f"Prueba un periodo más amplio: `/informe 7 {slug}`."
 
 CATEGORY_HEADERS: dict[Categoria, str] = {
     "ideas": "📚 Ideas del mundo editorial",
@@ -113,15 +130,10 @@ def _count_country_candidates(
 ) -> tuple[int, int, int]:
     """Return (classified relevant in window, pending, total for country/region)."""
     since_iso = publication_since_iso(since)
-    if date_by_publication and strict_publication:
-        date_expr = "a.fecha_publicacion"
-        pub_filter = "AND a.fecha_publicacion IS NOT NULL AND a.fecha_publicacion != ''"
-    elif date_by_publication:
-        date_expr = "COALESCE(NULLIF(a.fecha_publicacion, ''), a.fecha_ingesta)"
-        pub_filter = ""
-    else:
-        date_expr = "a.fecha_ingesta"
-        pub_filter = ""
+    date_expr, pub_filter = pending_date_sql(
+        date_by_publication=date_by_publication,
+        strict_publication=strict_publication,
+    )
     geo = "m.pais = ?" if report_filter.pais else "m.region = ?"
     geo_val = report_filter.pais or report_filter.region
 
@@ -166,15 +178,10 @@ def _count_medio_candidates(
 ) -> tuple[int, int, int]:
     """Return (classified relevant in window, pending, total for medio)."""
     since_iso = publication_since_iso(since)
-    if date_by_publication and strict_publication:
-        date_expr = "a.fecha_publicacion"
-        pub_filter = "AND a.fecha_publicacion IS NOT NULL AND a.fecha_publicacion != ''"
-    elif date_by_publication:
-        date_expr = "COALESCE(NULLIF(a.fecha_publicacion, ''), a.fecha_ingesta)"
-        pub_filter = ""
-    else:
-        date_expr = "a.fecha_ingesta"
-        pub_filter = ""
+    date_expr, pub_filter = pending_date_sql(
+        date_by_publication=date_by_publication,
+        strict_publication=strict_publication,
+    )
     medio = report_filter.medio_nombre
 
     with get_connection() as conn:
@@ -241,18 +248,13 @@ def _fetch_sql_rows(
     """
     params: list[object] = [min_score]
 
-    if date_by_publication and strict_publication:
-        query += (
-            " AND a.fecha_publicacion IS NOT NULL"
-            " AND a.fecha_publicacion != ''"
-            " AND a.fecha_publicacion >= ?"
-        )
-    elif date_by_publication:
-        query += (
-            " AND COALESCE(NULLIF(a.fecha_publicacion, ''), a.fecha_ingesta) >= ?"
-        )
-    else:
-        query += " AND a.fecha_ingesta >= ?"
+    date_expr, pub_filter = pending_date_sql(
+        date_by_publication=date_by_publication,
+        strict_publication=strict_publication,
+    )
+    if pub_filter:
+        query += f" {pub_filter}"
+    query += f" AND {date_expr} >= ?"
     params.append(since_iso)
 
     if report_filter:
@@ -334,21 +336,6 @@ def _diagnose_empty_fetch(
     }
 
 
-def _tag_date_expr(
-    *,
-    date_by_publication: bool,
-    strict_publication: bool,
-) -> tuple[str, str]:
-    if date_by_publication and strict_publication:
-        return "a.fecha_publicacion", "AND a.fecha_publicacion IS NOT NULL AND a.fecha_publicacion != ''"
-    if date_by_publication:
-        return (
-            "COALESCE(NULLIF(a.fecha_publicacion, ''), a.fecha_ingesta)",
-            "",
-        )
-    return "a.fecha_ingesta", ""
-
-
 def _count_tag_candidates(
     report_filter: ReportFilter,
     since: datetime,
@@ -358,7 +345,7 @@ def _count_tag_candidates(
 ) -> tuple[int, int, int, int]:
     """Return (with tag in window, classified in window, missing tags, pending)."""
     since_iso = publication_since_iso(since)
-    date_expr, pub_filter = _tag_date_expr(
+    date_expr, pub_filter = pending_date_sql(
         date_by_publication=date_by_publication,
         strict_publication=strict_publication,
     )
@@ -426,6 +413,7 @@ def _empty_tag_message(
         f"<i>No hay artículos de {esc(tag_label)} "
         f"en los últimos {report_filter.days} días.</i>",
         "",
+        f"Ventana: desde {_format_window_start(since)}.",
         f"En base de datos: {with_tag} con tag en ventana, "
         f"{in_window} clasificados en ventana (cualquier tag), "
         f"{pending} pendientes de clasificar.",
@@ -490,7 +478,8 @@ def _empty_medio_message(
         f"<i>No hay artículos editoriales de {esc(label)} "
         f"en los últimos {report_filter.days} días.</i>",
         "",
-        f"En base de datos: {total_medio} artículos de {label}, "
+        f"Ventana: desde {_format_window_start(since)}.",
+        f"En base de datos: {total_medio} artículos de {label} en total, "
         f"{in_window} clasificados en ventana, {pending} pendientes de clasificar.",
     ]
     if pending:
@@ -529,10 +518,13 @@ def _empty_medio_message(
                 "descartados por priorización o ya enviados."
             )
     else:
+        slug = label.lower().replace(" ", " ")
         lines.append(
-            "Prueba un periodo más amplio o revisa con "
-            f"`/diagnostico 7 {label.lower()}`."
+            "Ningún artículo cae en esta ventana "
+            "(publicación e ingesta anteriores al inicio indicado)."
         )
+        lines.append(_wider_period_hint(report_filter.days, slug))
+        lines.append(f"Más detalle: `/diagnostico {report_filter.days or 7} {slug}`.")
     return "\n".join(lines)
 
 
@@ -660,7 +652,8 @@ def _empty_country_message(
         f"<i>No hay artículos editoriales de {esc(label)} "
         f"en los últimos {report_filter.days} días.</i>",
         "",
-        f"En base de datos: {total_geo} artículos de {label}, "
+        f"Ventana: desde {_format_window_start(since)}.",
+        f"En base de datos: {total_geo} artículos de {label} en total, "
         f"{in_window} clasificados en ventana, {pending} pendientes de clasificar.",
     ]
     if pending:
@@ -696,7 +689,7 @@ def _empty_country_message(
         elif diag["blocked_enviado"]:
             lines.append(
                 "Hay artículos clasificados, pero ya se enviaron en un informe anterior. "
-                "Prueba `/informe 7 " + esc(label.lower()) + "` o espera nuevas ingesta."
+                f"{_wider_period_hint(report_filter.days, label)}"
             )
         elif diag["blocked_keyword"]:
             lines.append(
@@ -712,8 +705,12 @@ def _empty_country_message(
             )
     else:
         lines.append(
-            f"Prueba un periodo más amplio: `/informe 7 {label.lower()}` "
-            "o revisa el filtro editorial con `python3 scripts/diagnose_pipeline.py`."
+            f"Ninguno de los {total_geo} artículos cae en esta ventana "
+            "(publicación e ingesta anteriores al inicio indicado)."
+        )
+        lines.append(_wider_period_hint(report_filter.days, label))
+        lines.append(
+            f"Más detalle: `/diagnostico {report_filter.days or 7} {label.lower()}`."
         )
     return "\n".join(lines)
 
@@ -746,19 +743,13 @@ def _fetch_articles(
         params.extend(article_ids)
     else:
         since_iso = publication_since_iso(since)
-        if date_by_publication and strict_publication:
-            query += (
-                " AND a.fecha_publicacion IS NOT NULL"
-                " AND a.fecha_publicacion != ''"
-                " AND a.fecha_publicacion >= ?"
-            )
-        elif date_by_publication:
-            query += (
-                " AND COALESCE(NULLIF(a.fecha_publicacion, ''), "
-                "a.fecha_ingesta) >= ?"
-            )
-        else:
-            query += " AND a.fecha_ingesta >= ?"
+        date_expr, pub_filter = pending_date_sql(
+            date_by_publication=date_by_publication,
+            strict_publication=strict_publication,
+        )
+        if pub_filter:
+            query += f" {pub_filter}"
+        query += f" AND {date_expr} >= ?"
         params.append(since_iso)
 
     if report_filter:
