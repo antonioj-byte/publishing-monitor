@@ -39,6 +39,21 @@ def _gemini_settings(**kwargs: object):
 class ClassificationFallbackTests(unittest.TestCase):
     def tearDown(self) -> None:
         classify._API_AUTH_FAILED = False
+        classify._API_FAILURE_REASON = None
+
+    def test_quota_offline_shows_original_language(self) -> None:
+        api_settings = _gemini_settings()
+        with patch("ai.classify.settings", api_settings):
+            result = classify.classify_offline(
+                titulo="Publisher news",
+                resumen="A publisher announces books.",
+                categoria_default="noticias",
+                idioma="en",
+                reason="quota",
+            )
+        self.assertIn("Sin créditos en Gemini", result.resumen_generado)
+        self.assertIn("A publisher announces books.", result.resumen_generado)
+        self.assertIsNone(result.titular_traducido)
 
     def test_invalid_anthropic_key_falls_back_offline(self) -> None:
         api_settings = _anthropic_settings(anthropic_api_key="invalid")
@@ -147,7 +162,9 @@ class ClassificationFallbackTests(unittest.TestCase):
             )
 
         self.assertTrue(classify._API_AUTH_FAILED)
-        self.assertIn("GOOGLE_API_KEY", result.resumen_generado)
+        self.assertEqual(classify._API_FAILURE_REASON, "quota")
+        self.assertIn("Sin créditos en Gemini", result.resumen_generado)
+        self.assertIn("A publisher announces books.", result.resumen_generado)
 
     def test_active_provider_and_model_reflect_settings(self) -> None:
         api_settings = _gemini_settings()

@@ -26,6 +26,19 @@ from medios_tiers import get_tier
 logger = logging.getLogger(__name__)
 
 _API_AUTH_FAILED = False
+_API_FAILURE_REASON: str | None = None  # "auth" | "quota" | None
+
+_IDIOMA_LABEL = {
+    "en": "inglés",
+    "fr": "francés",
+    "de": "alemán",
+    "it": "italiano",
+    "pt": "portugués",
+    "ca": "catalán",
+    "nl": "neerlandés",
+}
+
+QUOTA_ORIGINAL_PREFIX = "⚠️ Sin créditos en"
 
 
 def active_provider() -> str:
@@ -37,8 +50,9 @@ def active_model() -> str:
 
 
 def reset_api_auth_state() -> None:
-    global _API_AUTH_FAILED
+    global _API_AUTH_FAILED, _API_FAILURE_REASON
     _API_AUTH_FAILED = False
+    _API_FAILURE_REASON = None
 
 
 def verify_classify_api() -> None:
@@ -60,6 +74,19 @@ def _has_classify_api() -> bool:
     return settings.has_classify_api()
 
 
+def _provider_short_label() -> str:
+    if settings.classify_provider == "gemini":
+        return "Gemini"
+    return get_provider(settings).label
+
+
+def _original_language_body(titulo: str, resumen: str | None) -> str:
+    body = (resumen or titulo).strip()
+    if len(body) < 20:
+        body = titulo
+    return body[:400]
+
+
 def classify_offline(
     *,
     titulo: str,
@@ -73,7 +100,23 @@ def classify_offline(
 
     in_scope = is_editorial_scope(titulo=titulo, resumen=resumen)
     provider = get_provider(settings)
-    if idioma != "es":
+
+    if reason == "quota":
+        lang_label = _IDIOMA_LABEL.get(idioma, idioma.upper())
+        body = _original_language_body(titulo, resumen)
+        if idioma == "es":
+            summary = (
+                f"{QUOTA_ORIGINAL_PREFIX} {_provider_short_label()}; "
+                f"mostrando el texto del feed.\n\n{body}"
+            )
+            titular = titulo
+        else:
+            summary = (
+                f"{QUOTA_ORIGINAL_PREFIX} {_provider_short_label()}; "
+                f"mostrando texto original ({lang_label}).\n\n{body}"
+            )
+            titular = None
+    elif idioma != "es":
         if reason == "auth":
             summary = (
                 f"Resumen no disponible: {provider.key_env_name} inválida o sin "
@@ -96,7 +139,7 @@ def classify_offline(
         categoria=categoria_default,
         relevance_score=score,
         resumen_generado=summary,
-        titular_traducido=titular if idioma != "es" else None,
+        titular_traducido=titular if idioma != "es" and reason != "quota" else None,
         tags=[],
         en_alcance=in_scope,
     )
@@ -113,7 +156,7 @@ def classify_article(
     fecha_publicacion: str | None = None,
     allow_offline: bool = True,
 ) -> ClassificationResult:
-    global _API_AUTH_FAILED
+    global _API_AUTH_FAILED, _API_FAILURE_REASON
 
     if not _has_classify_api() or _API_AUTH_FAILED:
         if not allow_offline:
@@ -124,12 +167,13 @@ def classify_article(
                 "No classify API key for provider=%s — using offline classification",
                 settings.classify_provider,
             )
+        offline_reason = _API_FAILURE_REASON or "missing"
         return classify_offline(
             titulo=titulo,
             resumen=resumen,
             categoria_default=categoria_default,
             idioma=idioma,
-            reason="missing",
+            reason=offline_reason,
         )
 
     user_msg = build_user_message(
@@ -151,9 +195,23 @@ def classify_article(
             resumen=resumen,
             result=parse_response(raw),
         )
-    except (LLMAuthError, LLMQuotaError) as exc:
+    except LLMQuotaError as exc:
         _API_AUTH_FAILED = True
-        logger.error("%s auth/quota failed — offline fallback", provider.name, exc_info=exc)
+        _API_FAILURE_REASON = "quota"
+        logger.error("%s quota failed — original-language fallback", provider.name, exc_info=exc)
+        if not allow_offline:
+            raise _api_unavailable_error(str(exc)) from exc
+        return classify_offline(
+            titulo=titulo,
+            resumen=resumen,
+            categoria_default=categoria_default,
+            idioma=idioma,
+            reason="quota",
+        )
+    except LLMAuthError as exc:
+        _API_AUTH_FAILED = True
+        _API_FAILURE_REASON = "auth"
+        logger.error("%s auth failed — offline fallback", provider.name, exc_info=exc)
         if not allow_offline:
             raise _api_unavailable_error(str(exc)) from exc
         return classify_offline(
