@@ -24,9 +24,22 @@ _ENGLISH_MARKERS = re.compile(
     re.IGNORECASE,
 )
 
+_QUOTA_ORIGINAL_NOTICE = re.compile(
+    r"^⚠️ Sin créditos en .+; mostrando (?:texto original|el texto del feed)",
+    re.IGNORECASE,
+)
+
 
 def _marker_hits(text: str, pattern: re.Pattern[str]) -> int:
     return len(pattern.findall(text.lower()))
+
+
+def is_quota_original_fallback(resumen_generado: str | None) -> bool:
+    """True when classify used original feed text due to LLM quota exhaustion."""
+    if not resumen_generado:
+        return False
+    first_line = resumen_generado.strip().split("\n", 1)[0]
+    return bool(_QUOTA_ORIGINAL_NOTICE.match(first_line))
 
 
 def is_likely_untranslated(
@@ -38,6 +51,8 @@ def is_likely_untranslated(
     resumen_raw: str | None = None,
 ) -> bool:
     """True when summary/title still appear to be in the source language."""
+    if is_quota_original_fallback(resumen_generado):
+        return False
     if idioma == "es":
         return False
 
