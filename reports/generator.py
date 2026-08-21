@@ -15,7 +15,7 @@ from bot.config import settings
 from db.connection import get_connection
 from db.models import Categoria, ReportFilter
 from medios_tiers import get_tier
-from reports.dates import publication_since_iso, publication_within_window
+from reports.dates import catalog_window_start, publication_since_iso, publication_within_window
 from reports.medios_lookup import lookup_medio_id
 from reports.session import ReportSession, save_session
 from reports.telegram_format import esc, format_article_entry
@@ -94,7 +94,8 @@ def _resolve_window(
 ) -> tuple[datetime, bool, str]:
     now = _tz_now()
     if report_filter and report_filter.days:
-        return now - timedelta(days=report_filter.days), True, "informe_pais"
+        since = catalog_window_start(report_filter.days, now)
+        return since, True, "informe_pais"
     if mode == "informe_hoy":
         since = now.replace(hour=0, minute=0, second=0, microsecond=0)
         return since, True, "informe_hoy"

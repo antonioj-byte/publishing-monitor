@@ -1,6 +1,6 @@
 """Deployed bot version string (shown in /ping and logs)."""
 
-BOT_VERSION = "2026-08-21-project-audit"
+BOT_VERSION = "2026-08-21-fix-7day-window"
 
 # Fallback when GitHub API is unavailable (update on each deploy PR).
 LAST_PR_NUMBER = 53

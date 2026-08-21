@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from zoneinfo import ZoneInfo
 
 
@@ -38,6 +38,17 @@ def publication_within_window(
 
 def publication_since_iso(since: datetime) -> str:
     return since.astimezone(timezone.utc).isoformat()
+
+
+def catalog_window_start(days: int, now: datetime) -> datetime:
+    """Inclusive calendar window for /informe N … (today counts as day 1).
+
+    «Últimos 7 días» on Aug 21 → desde Aug 15 00:00 local, not Aug 14
+    (``now - timedelta(days=7)`` would span 8 calendar days).
+    """
+    start_of_today = now.replace(hour=0, minute=0, second=0, microsecond=0)
+    span = max(1, days)
+    return start_of_today - timedelta(days=span - 1)
 
 
 def format_publication_display(
