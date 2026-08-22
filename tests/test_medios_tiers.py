@@ -15,6 +15,7 @@ class MediosTierTests(unittest.TestCase):
     def test_tier1_prensa_especializada(self) -> None:
         self.assertEqual(get_tier("Publishers Weekly"), 1)
         self.assertEqual(get_tier("The Bookseller"), 1)
+        self.assertEqual(get_tier("Publishnews"), 1)
 
     def test_tier1_revistas_literarias(self) -> None:
         self.assertEqual(get_tier("The New Yorker"), 1)

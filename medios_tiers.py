@@ -18,6 +18,7 @@ TIER1_PRENSA = {
     "The Bookseller",
     "Publishing Perspectives",
     "Livres Hebdo",
+    "Publishnews",
     # Generalistas — secciones libros / cultura editorial
     "El País Babelia",
     "La Vanguardia Cultura",

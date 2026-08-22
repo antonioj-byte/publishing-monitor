@@ -3,6 +3,7 @@ Publishers Weekly,https://www.publishersweekly.com/pw/by-topic/industry-news,,ht
 The Bookseller,https://www.thebookseller.com,,https://www.thebookseller.com/news,scraping,noticias,en,uk,gb,true,1
 Publishing Perspectives,https://publishingperspectives.com,https://publishingperspectives.com/feed,,rss,noticias,en,us,us,true,1
 Livres Hebdo,https://www.livreshebdo.fr,https://www.livreshebdo.fr/feed,,rss,noticias,fr,eu,fr,true,1
+Publishnews,https://publishnews.es,https://publishnews.es/actualidad/feed/,,rss,noticias,es,eu,es,true,1
 El País Babelia,https://elpais.com/babelia/,https://feeds.elpais.com/mrss-s/pages/ep/site/elpais.com/section/babelia/portada,,rss,noticias,es,eu,es,true,1
 El Mundo Cultura,https://www.elmundo.es/cultura.html,https://e00-elmundo.uecdn.es/elmundo/rss/cultura.xml,,rss,noticias,es,eu,es,true,2
 La Vanguardia Cultura,https://www.lavanguardia.com/cultura,https://www.lavanguardia.com/rss/cultura.xml,,rss,noticias,es,eu,es,true,1
