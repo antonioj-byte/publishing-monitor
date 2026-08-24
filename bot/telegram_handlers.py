@@ -28,6 +28,7 @@ from bot.request_intent import UserRequest, informal_ack, parse_user_request
 from bot.voice_transcribe import VoiceTranscriptionError, transcribe_voice_bytes
 from bot.github_pr import format_latest_pr_line
 from bot.reclassify_service import run_backfill_tags, run_reclassify_all
+from bot.retranslate_service import run_retranslate
 from bot.restart_service import detect_restart_method, restart_bot, restart_method_hint
 from ai.classify import active_model, active_provider, api_failure_hint
 from ai.llm_provider import get_provider
@@ -171,6 +172,7 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
         "/medios — medios disponibles para filtrar informes\n"
         "/reclasificar — reclasificar artículos sin tags\n"
         "/reclasificar todo — reclasificar todos desde cero\n"
+        "/retraducir — retraducir artículos sin castellano\n"
         "/reiniciar — reiniciar el bot\n\n"
         "Los informes tienen un máximo de ~2.500 palabras.\n"
         "Si hay más contenido, usa /informe_mas.\n\n"
@@ -295,6 +297,7 @@ async def muestra_command(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
 
 _RECLASSIFY_RUNNING = False
 _RESTART_RUNNING = False
+_RETRANSLATE_RUNNING = False
 
 
 def _classify_api_hint() -> str:
@@ -456,6 +459,61 @@ async def reclasificar_command(update: Update, context: ContextTypes.DEFAULT_TYP
 async def retag_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Alias silencioso de /reclasificar (compatibilidad)."""
     await reclasificar_command(update, context)
+
+
+async def retraducir_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    global _RETRANSLATE_RUNNING
+    if not update.message:
+        return
+    if not is_authorized(update):
+        await update.message.reply_text(
+            unauthorized_message(update.effective_chat.id if update.effective_chat else "?")
+        )
+        return
+    if _RETRANSLATE_RUNNING:
+        await update.message.reply_text("Ya hay una retraducción en curso. Espera un momento.")
+        return
+
+    limit = 30
+    if context.args:
+        try:
+            limit = max(1, min(int(context.args[0]), 50))
+        except ValueError:
+            await update.message.reply_text("Uso: /retraducir [máximo artículos, default 30]")
+            return
+
+    await update.message.reply_text(
+        f"Retraduciendo hasta {limit} artículo(s) sin castellano…"
+    )
+    _RETRANSLATE_RUNNING = True
+
+    async def _job() -> None:
+        global _RETRANSLATE_RUNNING
+        try:
+            stats = await asyncio.to_thread(run_retranslate, limit=limit)
+            if stats.get("no_api"):
+                text = (
+                    "No hay API de clasificación configurada (GOOGLE_API_KEY o "
+                    "ANTHROPIC_API_KEY). No puedo traducir."
+                )
+            elif stats.get("attempted", 0) == 0:
+                text = "No hay artículos pendientes de traducción al castellano."
+            else:
+                text = (
+                    f"Retraducción terminada: {stats.get('fixed', 0)} corregidos, "
+                    f"{stats.get('still_untranslated', 0)} siguen sin castellano, "
+                    f"{stats.get('failed', 0)} fallidos.\n"
+                    "Repite /informe para ver el informe actualizado."
+                )
+        except Exception as exc:
+            logger.exception("retraducir failed")
+            text = f"Error en /retraducir: {exc}"
+        finally:
+            _RETRANSLATE_RUNNING = False
+        if update.message:
+            await update.message.reply_text(text)
+
+    asyncio.create_task(_job())
 
 
 async def unknown_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:

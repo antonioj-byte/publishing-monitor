@@ -38,6 +38,7 @@ from bot.telegram_handlers import (
     reclasificar_command,
     reiniciar_command,
     retag_command,
+    retraducir_command,
     start_command,
     tag_command,
     tags_command,
@@ -295,6 +296,7 @@ def build_application() -> Application:
     app.add_handler(CommandHandler("tag", tag_command))
     app.add_handler(CommandHandler("reclasificar", reclasificar_command))
     app.add_handler(CommandHandler("retag", retag_command))
+    app.add_handler(CommandHandler("retraducir", retraducir_command))
     app.add_handler(CommandHandler("reiniciar", reiniciar_command))
     app.add_handler(MessageHandler(filters.VOICE, voice_report))
     app.add_handler(MessageHandler(filters.COMMAND, unknown_command))
@@ -333,6 +335,7 @@ async def main_async() -> None:
                 BotCommand("muestra", "Últimos artículos clasificados"),
                 BotCommand("tags", "Tags editoriales y países"),
                 BotCommand("reclasificar", "Reclasificar artículos sin tags"),
+                BotCommand("retraducir", "Retraducir artículos sin castellano"),
                 BotCommand("reiniciar", "Reiniciar el bot"),
             ]
         )

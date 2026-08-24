@@ -1156,7 +1156,7 @@ def _build_pages(
     if untranslated_count:
         lines.append(
             f"\n\n<i>⚠️ {untranslated_count} artículo(s) sin traducir al castellano. "
-            "Ejecuta python3 scripts/reclassify_untranslated.py --yes</i>"
+            "Usa /retraducir y repite el informe.</i>"
         )
 
     body = "\n".join(lines)
