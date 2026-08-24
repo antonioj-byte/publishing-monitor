@@ -42,6 +42,12 @@ def is_quota_original_fallback(resumen_generado: str | None) -> bool:
     return bool(_QUOTA_ORIGINAL_NOTICE.match(first_line))
 
 
+_UNTRANSLATED_PLACEHOLDER = re.compile(
+    r"^Resumen no disponible",
+    re.IGNORECASE,
+)
+
+
 def is_likely_untranslated(
     *,
     idioma: str,
@@ -55,6 +61,9 @@ def is_likely_untranslated(
         return False
     if idioma == "es":
         return False
+
+    if resumen_generado and _UNTRANSLATED_PLACEHOLDER.match(resumen_generado.strip()):
+        return True
 
     titular = (titular_traducido or "").strip()
     resumen = (resumen_generado or "").strip()

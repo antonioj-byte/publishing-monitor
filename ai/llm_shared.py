@@ -95,6 +95,7 @@ Reglas de categoría:
 Reglas de traducción (OBLIGATORIO):
 - resumen_generado: SIEMPRE 2-4 líneas en castellano (español de España), aunque el original esté en otro idioma. Estilo píldora informativa: qué ha pasado, contexto mínimo, por qué interesa al lector editorial.
 - titular_traducido: SIEMPRE titular claro en castellano. Si el original ya está en español, reescríbelo más claro si hace falta; nunca devuelvas null.
+- Poesía, reseña breve o pieza muy corta: traduce titular y resume el contenido en castellano; no copies versos ni titular en inglés/francés/etc.
 
 Reglas de relevance_score (1-5):
 - Si en_alcance es false → relevance_score MÁXIMO 2 (normalmente 1).

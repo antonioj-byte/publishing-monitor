@@ -7,6 +7,7 @@ from datetime import datetime
 from zoneinfo import ZoneInfo
 
 from ai.classify import classify_all_pending
+from bot.retranslate_service import retranslate_before_report
 from db.connection import get_connection
 from db.models import ReportFilter
 from reports.dates import publication_since_iso
@@ -174,6 +175,10 @@ def build_editorial_report(
             )
         else:
             logger.info("Pipeline classify: skipped (pending=%d)", pending)
+
+        rt_stats = retranslate_before_report(limit=15)
+        if rt_stats.get("fixed"):
+            logger.info("Auto-retranslate before report: %s", rt_stats)
 
     report = build_report(
         mode=mode,

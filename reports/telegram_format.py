@@ -37,7 +37,7 @@ def format_article_entry(item: dict) -> str:
     if untranslated:
         resumen = (
             "<i>(Traducción al castellano pendiente — "
-            "ejecuta python3 scripts/reclassify_untranslated.py)</i>"
+            "usa /retraducir y vuelve a pedir el informe)</i>"
         )
     else:
         resumen = esc(item["resumen_generado"] or "(sin resumen)")

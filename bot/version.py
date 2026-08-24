@@ -1,6 +1,6 @@
 """Deployed bot version string (shown in /ping and logs)."""
 
-BOT_VERSION = "2026-08-21-fix-catalog-window"
+BOT_VERSION = "2026-08-24-retraducir-command"
 
 # Fallback when GitHub API is unavailable (update on each deploy PR).
 LAST_PR_NUMBER = 53
