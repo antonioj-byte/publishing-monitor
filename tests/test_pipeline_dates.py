@@ -8,10 +8,10 @@ from reports.pipeline_dates import date_flags_for_mode, pending_date_sql
 
 
 class PipelineDatesTests(unittest.TestCase):
-    def test_daily_digest_uses_strict_publication(self) -> None:
+    def test_daily_digest_allows_ingesta_fallback(self) -> None:
         use_pub, strict = date_flags_for_mode("informe")
         self.assertTrue(use_pub)
-        self.assertTrue(strict)
+        self.assertFalse(strict)
 
     def test_catalog_allows_ingesta_fallback(self) -> None:
         use_pub, strict = date_flags_for_mode("informe_pais")

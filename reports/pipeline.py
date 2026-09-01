@@ -127,6 +127,7 @@ def build_editorial_report(
     classify_before_report: bool = True,
     max_classify_batches: int | None = None,
     use_embedding_prioritization: bool = True,
+    retranslate_limit: int = 15,
 ) -> ReportResult:
     """
     Run the full editorial pipeline before generating a report.
@@ -176,9 +177,10 @@ def build_editorial_report(
         else:
             logger.info("Pipeline classify: skipped (pending=%d)", pending)
 
-        rt_stats = retranslate_before_report(limit=15)
-        if rt_stats.get("fixed"):
-            logger.info("Auto-retranslate before report: %s", rt_stats)
+        if retranslate_limit > 0:
+            rt_stats = retranslate_before_report(limit=retranslate_limit)
+            if rt_stats.get("fixed"):
+                logger.info("Auto-retranslate before report: %s", rt_stats)
 
     report = build_report(
         mode=mode,

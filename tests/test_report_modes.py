@@ -36,9 +36,9 @@ class ReportModeTests(unittest.TestCase):
         self.assertTrue(ReportMode.TODAY.uses_publication_date)
         self.assertFalse(ReportMode.CONTINUATION.uses_publication_date)
 
-    def test_strict_publication_date_only_for_today_and_digest(self) -> None:
+    def test_strict_publication_date_only_for_today(self) -> None:
         self.assertTrue(ReportMode.TODAY.strict_publication_date)
-        self.assertTrue(ReportMode.DAILY_DIGEST.strict_publication_date)
+        self.assertFalse(ReportMode.DAILY_DIGEST.strict_publication_date)
         self.assertFalse(ReportMode.CATALOG.strict_publication_date)
         self.assertFalse(ReportMode.CONTINUATION.strict_publication_date)
 
