@@ -42,7 +42,7 @@ from reports.generator import (
     split_message,
 )
 from reports.markdown_export import build_markdown_report, markdown_filename
-from reports.pipeline import build_editorial_report
+from reports.pipeline import build_editorial_report, classify_pending_for_daily_report
 from reports.session import load_session
 
 logger = logging.getLogger(__name__)
@@ -172,6 +172,7 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
         "/medios — medios disponibles para filtrar informes\n"
         "/reclasificar — reclasificar artículos sin tags\n"
         "/reclasificar todo — reclasificar todos desde cero\n"
+        "/clasificar — clasificar pendientes de la ventana del informe\n"
         "/retraducir — retraducir artículos sin castellano\n"
         "/reiniciar — reiniciar el bot\n\n"
         "Los informes tienen un máximo de ~2.500 palabras.\n"
@@ -298,6 +299,7 @@ async def muestra_command(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
 _RECLASSIFY_RUNNING = False
 _RESTART_RUNNING = False
 _RETRANSLATE_RUNNING = False
+_CLASSIFY_RUNNING = False
 
 
 def _classify_api_hint() -> str:
@@ -510,6 +512,67 @@ async def retraducir_command(update: Update, context: ContextTypes.DEFAULT_TYPE)
             text = f"Error en /retraducir: {exc}"
         finally:
             _RETRANSLATE_RUNNING = False
+        if update.message:
+            await update.message.reply_text(text)
+
+    asyncio.create_task(_job())
+
+
+async def clasificar_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Classify pending articles in the daily informe window."""
+    global _CLASSIFY_RUNNING
+    if not update.message:
+        return
+    if not is_authorized(update):
+        await update.message.reply_text(
+            unauthorized_message(update.effective_chat.id if update.effective_chat else "?")
+        )
+        return
+    if _CLASSIFY_RUNNING:
+        await update.message.reply_text("Ya hay una clasificación en curso. Espera un momento.")
+        return
+    if not settings.has_classify_api():
+        await update.message.reply_text(
+            "No hay API de clasificación configurada (GOOGLE_API_KEY o ANTHROPIC_API_KEY)."
+        )
+        return
+
+    max_batches = 10
+    if context.args:
+        try:
+            max_batches = max(1, min(int(context.args[0]), 30))
+        except ValueError:
+            await update.message.reply_text("Uso: /clasificar [lotes, default 10; máx. 30]")
+            return
+
+    await update.message.reply_text(
+        f"Clasificando pendientes de la ventana del informe "
+        f"(hasta {max_batches} lotes × 20 artículos)…\n"
+        "El bot sigue respondiendo a /ping."
+    )
+    _CLASSIFY_RUNNING = True
+
+    async def _job() -> None:
+        global _CLASSIFY_RUNNING
+        try:
+            stats = await asyncio.to_thread(
+                classify_pending_for_daily_report,
+                max_batches=max_batches,
+            )
+            if stats.get("batches", 0) == 0 and stats.get("remaining", 0) == 0:
+                text = "No hay artículos pendientes de clasificar en la ventana del informe."
+            else:
+                text = (
+                    f"Clasificación terminada: +{stats.get('classified', 0)} clasificados, "
+                    f"{stats.get('failed', 0)} fallidos, "
+                    f"{stats.get('remaining', 0)} pendientes en ventana.\n"
+                    "Repite /diagnostico y /informe."
+                )
+        except Exception as exc:
+            logger.exception("clasificar failed")
+            text = f"Error en /clasificar: {exc}"
+        finally:
+            _CLASSIFY_RUNNING = False
         if update.message:
             await update.message.reply_text(text)
 
