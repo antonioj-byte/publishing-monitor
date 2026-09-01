@@ -130,6 +130,46 @@ def collect_overview_stats() -> OverviewStats:
     )
 
 
+def _count_pending_in_window(
+    since,
+    *,
+    date_by_publication: bool,
+    strict_publication: bool,
+) -> int:
+    since_iso = since.astimezone(ZoneInfo("UTC")).isoformat()
+    date_expr, pub_filter = pending_date_sql(
+        date_by_publication=date_by_publication,
+        strict_publication=strict_publication,
+    )
+    with get_connection() as conn:
+        return conn.execute(
+            f"""
+            SELECT COUNT(*) FROM articulos a
+            WHERE a.procesado = 0
+              {pub_filter}
+              AND {date_expr} >= ?
+            """,
+            (since_iso,),
+        ).fetchone()[0]
+
+
+def _pending_classify_hint(pending_in_window: int) -> str:
+    if pending_in_window <= 0:
+        return ""
+    return (
+        f"⚠ {pending_in_window} sin clasificar en la ventana del informe → "
+        "/clasificar (o espera al cron :15 tras cada ingesta)"
+    )
+
+
+def _missing_tags_hint(missing_tags: int) -> str:
+    if missing_tags <= 0:
+        return ""
+    return (
+        f"⚠ {missing_tags} clasificados sin tags → /retag o /reclasificar"
+    )
+
+
 def format_estado_text() -> str:
     stats = collect_overview_stats()
     since, _, mode = _resolve_window("informe", None)
@@ -170,9 +210,14 @@ def format_estado_text() -> str:
 
     warnings: list[str] = []
     if stats.missing_tags:
-        warnings.append(f"{stats.missing_tags} clasificados sin tags → /reclasificar")
+        warnings.append(
+            f"{stats.missing_tags} clasificados sin tags → /retag o /reclasificar"
+        )
     if stats.pending:
-        warnings.append(f"{stats.pending} sin clasificar → /reclasificar")
+        warnings.append(
+            f"{stats.pending} sin clasificar en total → /clasificar "
+            "(prioriza la ventana del informe; no uses /reclasificar para esto)"
+        )
     if not api_ok:
         key = "GOOGLE_API_KEY" if provider == "gemini" else "ANTHROPIC_API_KEY"
         warnings.append(f"Sin {key} → clasificación offline")
@@ -234,9 +279,14 @@ def _format_default_diagnostico() -> str:
     )
     batch, _total = limit_batch_for_prioritization(articles)
     result = prioritize_articles(batch)
+    pending_in_window = _count_pending_in_window(
+        since,
+        date_by_publication=use_pub_date,
+        strict_publication=strict_pub,
+    )
 
     date_label = "publicación (estricta)" if strict_pub else (
-        "publicación" if use_pub_date else "ingesta"
+        "publicación o ingesta reciente" if use_pub_date else "ingesta"
     )
     lines = [
         "Diagnóstico del informe diario",
@@ -244,11 +294,12 @@ def _format_default_diagnostico() -> str:
         f"Ventana ({mode}): desde {since.isoformat()}",
         f"Filtro fecha: {date_label}",
         f"Artículos totales: {stats.total}",
-        f"  pendientes: {stats.pending}",
+        f"  pendientes (total BD): {stats.pending}",
+        f"  pendientes en ventana: {pending_in_window}",
         f"  con tags: {stats.with_tags}",
         f"  sin tags: {stats.missing_tags}",
         "",
-        "Etapas del informe:",
+        "Etapas del informe (solo ya clasificados):",
         f"  1. SQL (score≥{settings.min_relevance_score}, ventana): {raw}",
         f"  2. Tras filtro editorial: {len(articles)}",
         f"  3. Batch priorización (max {settings.prioritize_max_batch}): {len(batch)}",
@@ -256,11 +307,16 @@ def _format_default_diagnostico() -> str:
         f"  5. Artículos en informe: {len(result.articles)}",
     ]
 
-    if stats.missing_tags:
-        lines.append("")
-        lines.append("⚠ Hay artículos clasificados sin tags → /reclasificar")
-    if stats.pending:
-        lines.append("⚠ Hay artículos sin clasificar → /reclasificar")
+    hint = _missing_tags_hint(stats.missing_tags)
+    if hint:
+        lines.append(hint)
+    hint = _pending_classify_hint(pending_in_window)
+    if hint:
+        lines.append(hint)
+    elif stats.pending:
+        lines.append(
+            "ℹ Hay pendientes fuera de la ventana del informe; no afectan al /informe de hoy."
+        )
     if raw and not result.articles:
         lines.append("⚠ Nada supera el umbral de priorización. Prueba /informe 7 <tag>")
 
@@ -364,10 +420,13 @@ def _format_filtered_diagnostico(report_filter: ReportFilter) -> str:
 
     if missing_tags:
         lines.append("")
-        lines.append("⚠ Artículos clasificados sin tags → /reclasificar")
+        lines.append(_missing_tags_hint(missing_tags))
     elif pending:
         lines.append("")
-        lines.append("⚠ Artículos sin clasificar → /reclasificar")
+        lines.append(
+            f"⚠ {pending} sin clasificar en esta ventana → /clasificar "
+            "(no /reclasificar)"
+        )
     elif stage1 and not articles:
         lines.append("")
         lines.append("⚠ Hay candidatos pero el filtro editorial los descartó todos")
