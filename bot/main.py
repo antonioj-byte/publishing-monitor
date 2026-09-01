@@ -6,7 +6,9 @@ import asyncio
 import logging
 import sys
 import time
+from datetime import datetime
 
+from apscheduler.events import EVENT_JOB_ERROR, EVENT_JOB_MISSED
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.cron import CronTrigger
 from telegram.error import Conflict
@@ -48,7 +50,12 @@ from bot.telegram_handlers import (
 from bot.version import BOT_VERSION
 from db.connection import get_connection, init_schema
 from ingest.runner import ingest_all, ingest_medio_by_id
-from reports.generator import mark_articles_sent, record_informe, split_message
+from reports.generator import (
+    informe_automatico_sent_today,
+    mark_articles_sent,
+    record_informe,
+    split_message,
+)
 from reports.pipeline import build_editorial_report, classify_pending_for_daily_report
 from reports.prioritize import _compute_embeddings
 from scripts.load_medios import load_medios
@@ -63,8 +70,11 @@ logger = logging.getLogger(__name__)
 _JOB_DEFAULTS = {
     "max_instances": 1,
     "coalesce": True,
-    "misfire_grace_time": 300,
+    "misfire_grace_time": 7200,
 }
+
+_AUTO_INFORME_CLASSIFY_BATCHES = 10
+_AUTO_INFORME_RETRANSLATE_LIMIT = 3
 
 
 def _sync_medios_from_csv() -> list[str]:
@@ -114,9 +124,13 @@ async def job_classify() -> None:
 
 async def job_cierre() -> None:
     logger.info("Starting cierre (ingest + classify daily window)")
-    await job_ingest()
-    stats = await asyncio.to_thread(classify_pending_for_daily_report, max_batches=5)
-    logger.info("Cierre classification done: %s", stats)
+    write_heartbeat(status="running", detail="job_cierre")
+    try:
+        await job_ingest()
+        stats = await asyncio.to_thread(classify_pending_for_daily_report, max_batches=8)
+        logger.info("Cierre classification done: %s", stats)
+    finally:
+        write_heartbeat(status="running", detail="cierre_done")
 
 
 async def job_informe_automatico(app: Application) -> None:
@@ -126,19 +140,19 @@ async def job_informe_automatico(app: Application) -> None:
         logger.error("TELEGRAM_CHAT_ID not set")
         return
 
+    write_heartbeat(status="running", detail="job_informe_automatico")
     try:
-        await job_cierre()
-        pre_stats = await asyncio.to_thread(
-            classify_pending_for_daily_report,
-            max_batches=3,
-        )
-        logger.info("Pre-report classification: %s", pre_stats)
+        # Cierre at 6:00 already ingested/classified; only refresh feeds here.
+        await job_ingest()
 
         report = await asyncio.to_thread(
             build_editorial_report,
             "informe",
             chat_id=chat_id,
-            classify_before_report=False,
+            classify_before_report=True,
+            max_classify_batches=_AUTO_INFORME_CLASSIFY_BATCHES,
+            use_embedding_prioritization=settings.prioritize_before_telegram_report,
+            retranslate_limit=_AUTO_INFORME_RETRANSLATE_LIMIT,
         )
         session = load_session(chat_id)
         sent_count = 0
@@ -177,8 +191,10 @@ async def job_informe_automatico(app: Application) -> None:
             )
 
         logger.info("Automatic report sent (%d articles)", sent_count)
+        write_heartbeat(status="running", detail=f"informe_ok articles={sent_count}")
     except Exception as exc:
         logger.exception("Automatic report failed")
+        write_heartbeat(status="running", detail=f"informe_failed: {exc}")
         try:
             await app.bot.send_message(
                 chat_id=chat_id,
@@ -189,6 +205,21 @@ async def job_informe_automatico(app: Application) -> None:
             )
         except Exception:
             logger.exception("Could not notify chat about automatic report failure")
+
+
+async def _catchup_missed_informe(app: Application) -> None:
+    """Run today's automatic report if the bot restarted after the 6:30 slot."""
+    await asyncio.sleep(45)
+    tz = ZoneInfo(settings.timezone)
+    now = datetime.now(tz)
+    cutoff = now.replace(hour=6, minute=35, second=0, microsecond=0)
+    if now < cutoff:
+        return
+    if informe_automatico_sent_today():
+        logger.info("Catch-up informe: already sent today")
+        return
+    logger.warning("Informe automático de hoy no enviado — ejecutando catch-up")
+    await job_informe_automatico(app)
 
 
 async def _prewarm_embeddings_background() -> None:
@@ -228,23 +259,41 @@ async def _error_handler(update: object, context: ContextTypes.DEFAULT_TYPE) -> 
             logger.exception("Could not notify user about handler error")
 
 
+def _scheduler_listener(app: Application):
+    def listener(event) -> None:
+        if event.code == EVENT_JOB_MISSED:
+            logger.error("Scheduler missed job: %s (scheduled=%s)", event.job_id, event.scheduled_run_time)
+            if event.job_id == "informe_automatico" and not informe_automatico_sent_today():
+                asyncio.create_task(job_informe_automatico(app))
+        elif event.code == EVENT_JOB_ERROR:
+            logger.exception("Scheduler job %s failed: %s", event.job_id, event.exception)
+
+    return listener
+
+
 def setup_scheduler(app: Application) -> AsyncIOScheduler:
     tz = ZoneInfo(settings.timezone)
     scheduler = AsyncIOScheduler(timezone=tz, job_defaults=_JOB_DEFAULTS)
+    scheduler.add_listener(_scheduler_listener(app), EVENT_JOB_MISSED | EVENT_JOB_ERROR)
 
     for hour in (8, 11, 14, 17, 20, 23):
-        scheduler.add_job(job_ingest, CronTrigger(hour=hour, minute=0, timezone=tz))
+        scheduler.add_job(job_ingest, CronTrigger(hour=hour, minute=0, timezone=tz), id=f"ingest_{hour}")
 
-    scheduler.add_job(job_cierre, CronTrigger(hour=6, minute=0, timezone=tz))
+    scheduler.add_job(job_cierre, CronTrigger(hour=6, minute=0, timezone=tz), id="cierre")
 
     scheduler.add_job(
         job_informe_automatico,
         CronTrigger(hour=6, minute=30, timezone=tz),
         args=[app],
+        id="informe_automatico",
     )
 
     for hour in (8, 11, 14, 17, 20, 23):
-        scheduler.add_job(job_classify, CronTrigger(hour=hour, minute=15, timezone=tz))
+        scheduler.add_job(
+            job_classify,
+            CronTrigger(hour=hour, minute=15, timezone=tz),
+            id=f"classify_{hour}",
+        )
 
     return scheduler
 
@@ -365,6 +414,7 @@ async def main_async() -> None:
         if settings.prewarm_embeddings_on_start:
             asyncio.create_task(_prewarm_embeddings_background())
         asyncio.create_task(_heartbeat_loop())
+        asyncio.create_task(_catchup_missed_informe(app))
 
         try:
             while True:

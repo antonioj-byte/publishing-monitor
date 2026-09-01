@@ -1389,6 +1389,23 @@ def record_informe(article_ids: list[int], tipo: str = "manual") -> None:
         conn.commit()
 
 
+def informe_automatico_sent_today() -> bool:
+    """True if an automatic report was already recorded for the local calendar day."""
+    tz = ZoneInfo(settings.timezone)
+    start = _tz_now().replace(hour=0, minute=0, second=0, microsecond=0)
+    start_utc = start.astimezone(ZoneInfo("UTC")).isoformat()
+    with get_connection() as conn:
+        row = conn.execute(
+            """
+            SELECT 1 FROM informes
+            WHERE tipo = 'automatico' AND enviado_at >= ?
+            LIMIT 1
+            """,
+            (start_utc,),
+        ).fetchone()
+    return row is not None
+
+
 def mark_articles_sent(article_ids: list[int]) -> None:
     if not article_ids:
         return

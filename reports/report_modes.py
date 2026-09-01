@@ -17,6 +17,8 @@ class ReportMode(str, Enum):
 
     DAILY_DIGEST: default `/informe` since the last cierre — breaking-news
         style. Strict prioritization threshold, one article per event.
+        Uses MAX(publication, ingesta) so newly ingested items are not
+        dropped when RSS publication dates are missing or stale.
     CATALOG: `/informe <días> <tag|país>` — multi-day browsing. All matched
         articles are included; recency is scaled across the full window
         instead of a 24-48h cliff, and events are not collapsed.
@@ -51,4 +53,4 @@ class ReportMode(str, Enum):
     @property
     def strict_publication_date(self) -> bool:
         """Exclude articles missing a real publication date entirely."""
-        return self in (ReportMode.TODAY, ReportMode.DAILY_DIGEST)
+        return self is ReportMode.TODAY
