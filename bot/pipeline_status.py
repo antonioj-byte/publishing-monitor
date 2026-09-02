@@ -130,7 +130,7 @@ def collect_overview_stats() -> OverviewStats:
     )
 
 
-def _count_pending_in_window(
+def count_pending_in_window(
     since,
     *,
     date_by_publication: bool,
@@ -279,7 +279,7 @@ def _format_default_diagnostico() -> str:
     )
     batch, _total = limit_batch_for_prioritization(articles)
     result = prioritize_articles(batch)
-    pending_in_window = _count_pending_in_window(
+    pending_in_window = count_pending_in_window(
         since,
         date_by_publication=use_pub_date,
         strict_publication=strict_pub,
@@ -321,6 +321,31 @@ def _format_default_diagnostico() -> str:
         lines.append("⚠ Nada supera el umbral de priorización. Prueba /informe 7 <tag>")
 
     return "\n".join(lines)
+
+
+def informe_shortfall_hint(*, article_count: int, threshold: int = 10) -> str | None:
+    """Hint when an informe has few articles, usually due to pending classification."""
+    if article_count >= threshold:
+        return None
+    since, _, mode = _resolve_window("informe", None)
+    use_pub_date, strict_pub = date_flags_for_mode(mode)
+    pending_in_window = count_pending_in_window(
+        since,
+        date_by_publication=use_pub_date,
+        strict_publication=strict_pub,
+    )
+    if pending_in_window <= 0:
+        if article_count == 0:
+            return (
+                "Informe vacío: no hay artículos clasificados en la ventana. "
+                "Prueba /diagnostico."
+            )
+        return None
+    return (
+        f"Informe corto ({article_count} artículos): "
+        f"{pending_in_window} pendientes de clasificar en la ventana. "
+        "Ejecuta /clasificar y repite /informe."
+    )
 
 
 def _format_filtered_diagnostico(report_filter: ReportFilter) -> str:

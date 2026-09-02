@@ -17,7 +17,7 @@ from telegram import BotCommand, Update
 from telegram.ext import Application, CommandHandler, ContextTypes, MessageHandler, filters
 from zoneinfo import ZoneInfo
 
-from ai.classify import classify_pending
+from bot.pipeline_status import informe_shortfall_hint
 from bot.profile import sync_bot_profile
 from bot.config import ENV_PATH, settings
 from bot.heartbeat import write_heartbeat
@@ -117,9 +117,9 @@ async def job_ingest() -> None:
 
 
 async def job_classify() -> None:
-    """Classify one batch so scheduled work does not monopolize the process."""
-    logger.info("Starting scheduled classification batch")
-    stats = await asyncio.to_thread(classify_pending, limit=30)
+    """Classify pending articles in the daily informe window (not the global backlog)."""
+    logger.info("Starting scheduled classification batch (daily window)")
+    stats = await asyncio.to_thread(classify_pending_for_daily_report, max_batches=3)
     logger.info("Classification batch done: %s", stats)
 
 
@@ -193,6 +193,12 @@ async def job_informe_automatico(app: Application) -> None:
 
         logger.info("Automatic report sent (%d articles)", sent_count)
         write_heartbeat(status="running", detail=f"informe_ok articles={sent_count}")
+        hint = await asyncio.to_thread(
+            informe_shortfall_hint,
+            article_count=sent_count,
+        )
+        if hint:
+            await app.bot.send_message(chat_id=chat_id, text=hint)
     except Exception as exc:
         logger.exception("Automatic report failed")
         write_heartbeat(status="running", detail=f"informe_failed: {exc}")
@@ -209,17 +215,30 @@ async def job_informe_automatico(app: Application) -> None:
 
 
 async def _catchup_missed_informe(app: Application) -> None:
-    """Run today's automatic report if the bot restarted after the 6:30 slot."""
-    await asyncio.sleep(45)
+    """Run today's automatic report if the 6:30 slot was missed (e.g. Railway restart)."""
     tz = ZoneInfo(settings.timezone)
+    await asyncio.sleep(45)
     now = datetime.now(tz)
-    cutoff = now.replace(hour=6, minute=35, second=0, microsecond=0)
+    cutoff = now.replace(hour=6, minute=36, second=0, microsecond=0)
     if now < cutoff:
-        return
+        wait_seconds = (cutoff - now).total_seconds()
+        logger.info(
+            "Catch-up informe: esperando %.0fs hasta después del slot 6:30",
+            wait_seconds,
+        )
+        await asyncio.sleep(wait_seconds)
     if informe_automatico_sent_today():
         logger.info("Catch-up informe: already sent today")
         return
     logger.warning("Informe automático de hoy no enviado — ejecutando catch-up")
+    await job_informe_automatico(app)
+
+
+async def job_informe_respaldo(app: Application) -> None:
+    """Second chance at 7:00 if the 6:30 automatic report never ran."""
+    if informe_automatico_sent_today():
+        return
+    logger.warning("Informe respaldo 7:00 — aún no enviado hoy")
     await job_informe_automatico(app)
 
 
@@ -264,7 +283,7 @@ def _scheduler_listener(app: Application):
     def listener(event) -> None:
         if event.code == EVENT_JOB_MISSED:
             logger.error("Scheduler missed job: %s (scheduled=%s)", event.job_id, event.scheduled_run_time)
-            if event.job_id == "informe_automatico" and not informe_automatico_sent_today():
+            if event.job_id in ("informe_automatico", "informe_respaldo") and not informe_automatico_sent_today():
                 asyncio.create_task(job_informe_automatico(app))
         elif event.code == EVENT_JOB_ERROR:
             logger.exception("Scheduler job %s failed: %s", event.job_id, event.exception)
@@ -287,6 +306,13 @@ def setup_scheduler(app: Application) -> AsyncIOScheduler:
         CronTrigger(hour=6, minute=30, timezone=tz),
         args=[app],
         id="informe_automatico",
+    )
+
+    scheduler.add_job(
+        job_informe_respaldo,
+        CronTrigger(hour=7, minute=0, timezone=tz),
+        args=[app],
+        id="informe_respaldo",
     )
 
     for hour in (8, 11, 14, 17, 20, 23):
