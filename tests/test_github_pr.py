@@ -6,6 +6,7 @@ import unittest
 from unittest.mock import patch
 
 from bot import github_pr
+from bot.version import LAST_PR_NUMBER, LAST_PR_TITLE
 
 
 class LatestPrTests(unittest.TestCase):
@@ -26,8 +27,8 @@ class LatestPrTests(unittest.TestCase):
     def test_format_latest_pr_line_fallback_to_version(self) -> None:
         with patch.object(github_pr, "get_latest_merged_pr", return_value=None):
             line = github_pr.format_latest_pr_line()
-        self.assertIn("#53", line)
-        self.assertIn("gasto", line.lower())
+        self.assertIn(f"#{LAST_PR_NUMBER}", line)
+        self.assertIn(LAST_PR_TITLE.split()[0].lower(), line.lower())
 
     def test_fetch_picks_first_merged_pull(self) -> None:
         payload = [

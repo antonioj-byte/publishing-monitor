@@ -22,6 +22,7 @@ from bot.pipeline_status import (
     format_diagnostico_text,
     format_estado_text,
     format_muestra_text,
+    informe_shortfall_hint,
 )
 from bot.report_parser import parse_command_args
 from bot.request_intent import UserRequest, informal_ack, parse_user_request
@@ -877,13 +878,19 @@ async def _send_report(
         status = status_message
     else:
         label = "Markdown" if markdown_only else "informe"
-        if settings.classify_before_telegram_report:
+        if settings.classify_before_telegram_report or (mode == "informe" and report_filter is None):
             status = f"Clasificando y generando {label}{_filter_label(report_filter)}…"
         else:
             status = f"Generando {label}{_filter_label(report_filter)}…"
     await update.message.reply_text(status)
 
-    classify_cap = 1 if settings.classify_before_telegram_report else None
+    classify_cap = None
+    classify_before = settings.classify_before_telegram_report
+    if settings.classify_before_telegram_report:
+        classify_cap = 1
+    elif mode == "informe" and report_filter is None:
+        classify_before = True
+        classify_cap = 5
     try:
         report = await asyncio.to_thread(
             partial(
@@ -891,7 +898,7 @@ async def _send_report(
                 mode=mode,
                 report_filter=report_filter,
                 chat_id=chat_id,
-                classify_before_report=settings.classify_before_telegram_report,
+                classify_before_report=classify_before,
                 max_classify_batches=classify_cap,
                 use_embedding_prioritization=settings.prioritize_before_telegram_report,
             )
@@ -938,6 +945,13 @@ async def _send_report(
 
         if not report.article_ids:
             logger.info("Empty report for mode=%s filter=%s", mode, report_filter)
+        elif mode == "informe" and report_filter is None:
+            hint = await asyncio.to_thread(
+                informe_shortfall_hint,
+                article_count=len(report.article_ids),
+            )
+            if hint:
+                await update.message.reply_text(hint)
     except Exception as exc:
         logger.exception("Report generation failed")
         await update.message.reply_text(f"Error al generar el informe: {exc}")
