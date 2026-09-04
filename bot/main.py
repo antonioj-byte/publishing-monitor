@@ -74,8 +74,9 @@ _JOB_DEFAULTS = {
     "misfire_grace_time": 7200,
 }
 
-_AUTO_INFORME_CLASSIFY_BATCHES = 10
 _AUTO_INFORME_RETRANSLATE_LIMIT = 3
+_PREINFORME_CLASSIFY_BATCHES = 5
+_PENDING_AUTO_REPORT_KEY = "pending_auto_report"
 
 
 def _sync_medios_from_csv() -> list[str]:
@@ -134,8 +135,112 @@ async def job_cierre() -> None:
         write_heartbeat(status="running", detail="cierre_done")
 
 
-async def job_informe_automatico(app: Application) -> None:
-    logger.info("Starting automatic report")
+async def job_preinforme(app: Application) -> None:
+    """Ingest + classify + build report before the 6:30 send slot."""
+    chat_id = settings.telegram_chat_id
+    if not chat_id:
+        logger.error("TELEGRAM_CHAT_ID not set")
+        return
+
+    started = time.monotonic()
+    logger.info("Starting pre-informe prep (ingest + classify + build)")
+    write_heartbeat(status="running", detail="job_preinforme")
+    try:
+        await job_ingest()
+        stats = await asyncio.to_thread(
+            classify_pending_for_daily_report,
+            max_batches=_PREINFORME_CLASSIFY_BATCHES,
+        )
+        logger.info("Pre-informe classification: %s", stats)
+
+        report = await asyncio.to_thread(
+            build_editorial_report,
+            "informe",
+            chat_id=chat_id,
+            classify_before_report=False,
+            use_embedding_prioritization=settings.prioritize_before_telegram_report,
+            retranslate_limit=_AUTO_INFORME_RETRANSLATE_LIMIT,
+        )
+        app.bot_data[_PENDING_AUTO_REPORT_KEY] = report
+        ready_at = datetime.now(ZoneInfo(settings.timezone)).isoformat()
+        app.bot_data["pending_auto_report_ready_at"] = ready_at
+        logger.info(
+            "Pre-informe ready at %s (%.1fs prep)",
+            ready_at,
+            time.monotonic() - started,
+        )
+    except Exception:
+        logger.exception("Pre-informe prep failed")
+        app.bot_data.pop(_PENDING_AUTO_REPORT_KEY, None)
+        app.bot_data.pop("pending_auto_report_ready_at", None)
+        raise
+    finally:
+        write_heartbeat(status="running", detail="preinforme_done")
+
+
+async def _deliver_auto_informe(app: Application, report) -> int:
+    """Send a prepared report to Telegram and record the informe."""
+    chat_id = settings.telegram_chat_id
+    if not chat_id:
+        return 0
+
+    tz = ZoneInfo(settings.timezone)
+    dispatch_at = datetime.now(tz)
+    session = load_session(chat_id)
+    sent_count = 0
+    first_chunk = True
+
+    while True:
+        for chunk in split_message(report.text):
+            if first_chunk:
+                logger.info(
+                    "Informe automático: primer mensaje Telegram a las %s",
+                    dispatch_at.strftime("%H:%M:%S"),
+                )
+                first_chunk = False
+            await app.bot.send_message(
+                chat_id=chat_id,
+                text=chunk,
+                parse_mode=ParseMode.HTML,
+                disable_web_page_preview=True,
+            )
+
+        if report.article_ids:
+            await asyncio.to_thread(mark_articles_sent, report.article_ids)
+            sent_count += len(report.article_ids)
+
+        if not report.has_more:
+            complete_ids = session.article_ids if session else report.article_ids
+            if complete_ids:
+                await asyncio.to_thread(
+                    record_informe,
+                    complete_ids,
+                    "automatico",
+                )
+            break
+
+        session = load_session(chat_id)
+        if not session:
+            logger.error("Automatic report continuation session missing")
+            break
+        report = await asyncio.to_thread(
+            build_editorial_report,
+            continuation=session,
+            chat_id=chat_id,
+        )
+
+    logger.info("Automatic report sent (%d articles)", sent_count)
+    hint = await asyncio.to_thread(
+        informe_shortfall_hint,
+        article_count=sent_count,
+    )
+    if hint:
+        await app.bot.send_message(chat_id=chat_id, text=hint)
+    return sent_count
+
+
+async def job_informe_automatico(app: Application, *, force_prep: bool = False) -> None:
+    """Send the daily report at 6:30 (prep should already be done at 6:10)."""
     chat_id = settings.telegram_chat_id
     if not chat_id:
         logger.error("TELEGRAM_CHAT_ID not set")
@@ -143,62 +248,30 @@ async def job_informe_automatico(app: Application) -> None:
 
     write_heartbeat(status="running", detail="job_informe_automatico")
     try:
-        # Cierre at 6:00 already ingested/classified; only refresh feeds here.
-        await job_ingest()
-
-        report = await asyncio.to_thread(
-            build_editorial_report,
-            "informe",
-            chat_id=chat_id,
-            classify_before_report=True,
-            max_classify_batches=_AUTO_INFORME_CLASSIFY_BATCHES,
-            use_embedding_prioritization=settings.prioritize_before_telegram_report,
-            retranslate_limit=_AUTO_INFORME_RETRANSLATE_LIMIT,
-        )
-        session = load_session(chat_id)
-        sent_count = 0
-
-        while True:
-            for chunk in split_message(report.text):
-                await app.bot.send_message(
-                    chat_id=chat_id,
-                    text=chunk,
-                    parse_mode=ParseMode.HTML,
-                    disable_web_page_preview=True,
-                )
-
-            if report.article_ids:
-                await asyncio.to_thread(mark_articles_sent, report.article_ids)
-                sent_count += len(report.article_ids)
-
-            if not report.has_more:
-                complete_ids = session.article_ids if session else report.article_ids
-                if complete_ids:
-                    await asyncio.to_thread(
-                        record_informe,
-                        complete_ids,
-                        "automatico",
-                    )
-                break
-
-            session = load_session(chat_id)
-            if not session:
-                logger.error("Automatic report continuation session missing")
-                break
+        report = app.bot_data.pop(_PENDING_AUTO_REPORT_KEY, None)
+        ready_at = app.bot_data.pop("pending_auto_report_ready_at", None)
+        if report is not None:
+            logger.info("Using pre-built informe from %s", ready_at or "?")
+        elif force_prep:
+            logger.info("Pre-informe cache miss — running full prep (force)")
+            await job_preinforme(app)
+            report = app.bot_data.pop(_PENDING_AUTO_REPORT_KEY, None)
+        else:
+            logger.warning("Pre-informe cache miss at 6:30 — fast fallback build")
             report = await asyncio.to_thread(
                 build_editorial_report,
-                continuation=session,
+                "informe",
                 chat_id=chat_id,
+                classify_before_report=False,
+                use_embedding_prioritization=settings.prioritize_before_telegram_report,
+                retranslate_limit=0,
             )
 
-        logger.info("Automatic report sent (%d articles)", sent_count)
+        if report is None:
+            raise RuntimeError("No se pudo generar el informe automático")
+
+        sent_count = await _deliver_auto_informe(app, report)
         write_heartbeat(status="running", detail=f"informe_ok articles={sent_count}")
-        hint = await asyncio.to_thread(
-            informe_shortfall_hint,
-            article_count=sent_count,
-        )
-        if hint:
-            await app.bot.send_message(chat_id=chat_id, text=hint)
     except Exception as exc:
         logger.exception("Automatic report failed")
         write_heartbeat(status="running", detail=f"informe_failed: {exc}")
@@ -231,7 +304,7 @@ async def _catchup_missed_informe(app: Application) -> None:
         logger.info("Catch-up informe: already sent today")
         return
     logger.warning("Informe automático de hoy no enviado — ejecutando catch-up")
-    await job_informe_automatico(app)
+    await job_informe_automatico(app, force_prep=True)
 
 
 async def job_informe_respaldo(app: Application) -> None:
@@ -239,7 +312,7 @@ async def job_informe_respaldo(app: Application) -> None:
     if informe_automatico_sent_today():
         return
     logger.warning("Informe respaldo 7:00 — aún no enviado hoy")
-    await job_informe_automatico(app)
+    await job_informe_automatico(app, force_prep=True)
 
 
 async def _prewarm_embeddings_background() -> None:
@@ -300,6 +373,13 @@ def setup_scheduler(app: Application) -> AsyncIOScheduler:
         scheduler.add_job(job_ingest, CronTrigger(hour=hour, minute=0, timezone=tz), id=f"ingest_{hour}")
 
     scheduler.add_job(job_cierre, CronTrigger(hour=6, minute=0, timezone=tz), id="cierre")
+
+    scheduler.add_job(
+        job_preinforme,
+        CronTrigger(hour=6, minute=10, timezone=tz),
+        args=[app],
+        id="preinforme",
+    )
 
     scheduler.add_job(
         job_informe_automatico,
