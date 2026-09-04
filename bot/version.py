@@ -1,6 +1,6 @@
 """Deployed bot version string (shown in /ping and logs)."""
 
-BOT_VERSION = "2026-09-02-informe-reliability"
+BOT_VERSION = "2026-09-04-informe-630-sharp"
 
 # Fallback when GitHub API is unavailable (update on each deploy PR).
 LAST_PR_NUMBER = 59
