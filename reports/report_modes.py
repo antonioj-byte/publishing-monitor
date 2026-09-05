@@ -17,8 +17,9 @@ class ReportMode(str, Enum):
 
     DAILY_DIGEST: default `/informe` since the last cierre — breaking-news
         style. Strict prioritization threshold, one article per event.
-        Uses MAX(publication, ingesta) so newly ingested items are not
-        dropped when RSS publication dates are missing or stale.
+        Uses publication date when present; ingestion date only as fallback
+        when RSS omits publication (never MAX(pub, ingesta) — that lets
+        Google News resurfaced old items into the daily digest).
     CATALOG: `/informe <días> <tag|país>` — multi-day browsing. All matched
         articles are included; recency is scaled across the full window
         instead of a 24-48h cliff, and events are not collapsed.

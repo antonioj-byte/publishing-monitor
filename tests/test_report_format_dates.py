@@ -98,6 +98,79 @@ class PublicationDateTests(unittest.TestCase):
 
         self.assertEqual([item["id"] for item in articles], [2])
 
+    def test_daily_digest_excludes_old_publication_recently_reingested(self) -> None:
+        """Google News re-ingests year-old items; daily /informe must skip them."""
+        with TemporaryDirectory() as temp_dir:
+            db_path = Path(temp_dir) / "test.db"
+            conn = sqlite3.connect(db_path)
+            conn.executescript(
+                """
+                CREATE TABLE medios (
+                    id INTEGER PRIMARY KEY,
+                    nombre TEXT,
+                    region TEXT,
+                    pais TEXT,
+                    tier INTEGER
+                );
+                CREATE TABLE articulos (
+                    id INTEGER PRIMARY KEY,
+                    medio_id INTEGER,
+                    titulo_original TEXT,
+                    titular_traducido TEXT,
+                    resumen_generado TEXT,
+                    resumen_raw TEXT,
+                    idioma TEXT,
+                    url TEXT,
+                    categoria TEXT,
+                    relevance_score INTEGER,
+                    fecha_publicacion TEXT,
+                    fecha_ingesta TEXT,
+                    procesado INTEGER,
+                    enviado INTEGER,
+                    tags TEXT
+                );
+                INSERT INTO medios VALUES (1, 'WSJ Books', 'us', 'us', 1);
+                INSERT INTO articulos VALUES (
+                    1, 1, 'Vargas Llosa', 'Vargas Llosa', 'Summary', 'Summary', 'es',
+                    'https://example.com/vll', 'noticias', 5,
+                    '2025-04-13T10:00:00+00:00', '2026-09-05T06:00:00+00:00', 1, 0, '[]'
+                );
+                INSERT INTO articulos VALUES (
+                    2, 1, 'Fresh news', 'Fresh news', 'Summary', 'Summary', 'es',
+                    'https://example.com/new', 'noticias', 4,
+                    '2026-09-04T09:00:00+00:00', '2026-09-04T10:00:00+00:00', 1, 0, '[]'
+                );
+                """
+            )
+            conn.commit()
+            conn.close()
+
+            @contextmanager
+            def test_connection():
+                test_conn = sqlite3.connect(db_path)
+                test_conn.row_factory = sqlite3.Row
+                try:
+                    yield test_conn
+                finally:
+                    test_conn.close()
+
+            since = datetime(2026, 9, 4, 6, 30, tzinfo=ZoneInfo("Europe/Madrid"))
+            with (
+                patch("reports.generator.get_connection", test_connection),
+                patch("reports.generator.filter_editorial_scope", lambda rows: rows),
+                patch("reports.generator.apply_keyword_scope_filter", lambda rows: rows),
+                patch("reports.generator.get_tier", lambda _name: 1),
+            ):
+                articles = _fetch_articles(
+                    since,
+                    include_sent=True,
+                    date_by_publication=True,
+                    strict_publication=False,
+                    mode="informe",
+                )
+
+        self.assertEqual([item["id"] for item in articles], [2])
+
     def test_catalog_window_start_counts_today_as_day_one(self) -> None:
         now = datetime(2026, 8, 21, 11, 35, tzinfo=ZoneInfo("Europe/Madrid"))
         since = catalog_window_start(7, now)

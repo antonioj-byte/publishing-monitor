@@ -36,6 +36,17 @@ def publication_within_window(
     return True
 
 
+def article_in_daily_digest_window(article: dict, since: datetime) -> bool:
+    """Daily /informe: recent publication, or recent ingest when pub date is missing."""
+    pub = article.get("fecha_publicacion")
+    if pub and str(pub).strip():
+        return publication_within_window(pub, since)
+    ingesta = article.get("fecha_ingesta")
+    if ingesta and str(ingesta).strip():
+        return publication_within_window(ingesta, since)
+    return False
+
+
 def publication_since_iso(since: datetime) -> str:
     return since.astimezone(timezone.utc).isoformat()
 

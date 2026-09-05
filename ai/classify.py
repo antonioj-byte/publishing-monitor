@@ -254,6 +254,7 @@ def _date_filter_sql(
     since_iso: str | None,
     date_by_publication: bool,
     strict_publication_date: bool,
+    report_mode: str | None = None,
 ) -> tuple[list[str], list[object]]:
     conditions: list[str] = []
     params: list[object] = []
@@ -262,6 +263,7 @@ def _date_filter_sql(
     date_expr, pub_filter = pending_date_sql(
         date_by_publication=date_by_publication,
         strict_publication=strict_publication_date,
+        mode=report_mode,
     )
     if pub_filter:
         conditions.append(pub_filter.removeprefix("AND ").strip())
@@ -278,6 +280,7 @@ def classify_pending(
     since_iso: str | None = None,
     date_by_publication: bool = False,
     strict_publication_date: bool = False,
+    report_mode: str | None = None,
     require_tags: bool = False,
 ) -> dict[str, int]:
     stats = {"classified": 0, "failed": 0, "remaining": 0, "no_tags": 0}
@@ -288,6 +291,7 @@ def classify_pending(
         since_iso=since_iso,
         date_by_publication=date_by_publication,
         strict_publication_date=strict_publication_date,
+        report_mode=report_mode,
     )
     conditions.extend(date_conds)
     params.extend(date_params)
@@ -385,6 +389,7 @@ def classify_all_pending(
     since_iso: str | None = None,
     date_by_publication: bool = False,
     strict_publication_date: bool = False,
+    report_mode: str | None = None,
 ) -> dict[str, int]:
     """Classify all pending articles in batches (for informe / cierre)."""
     totals = {"classified": 0, "failed": 0, "remaining": 0, "batches": 0}
@@ -397,6 +402,7 @@ def classify_all_pending(
             since_iso=since_iso,
             date_by_publication=date_by_publication,
             strict_publication_date=strict_publication_date,
+            report_mode=report_mode,
         )
         totals["batches"] += 1
         totals["classified"] += stats["classified"]
