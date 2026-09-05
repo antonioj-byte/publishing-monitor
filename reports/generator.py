@@ -15,7 +15,12 @@ from bot.config import settings
 from db.connection import get_connection
 from db.models import Categoria, ReportFilter
 from medios_tiers import get_tier
-from reports.dates import catalog_window_start, publication_since_iso, publication_within_window
+from reports.dates import (
+    article_in_daily_digest_window,
+    catalog_window_start,
+    publication_since_iso,
+    publication_within_window,
+)
 from reports.pipeline_dates import pending_date_sql
 from reports.medios_lookup import lookup_medio_id
 from reports.session import ReportSession, save_session
@@ -723,6 +728,7 @@ def _fetch_articles(
     *,
     date_by_publication: bool = False,
     strict_publication: bool = False,
+    mode: str | None = None,
 ) -> list[dict]:
     min_score = settings.min_relevance_score
     query = """
@@ -746,6 +752,7 @@ def _fetch_articles(
         date_expr, pub_filter = pending_date_sql(
             date_by_publication=date_by_publication,
             strict_publication=strict_publication,
+            mode=mode,
         )
         if pub_filter:
             query += f" {pub_filter}"
@@ -797,6 +804,13 @@ def _fetch_articles(
             for a in articles
             if publication_within_window(a.get("fecha_publicacion"), since)
         ]
+    elif (
+        mode == "informe"
+        and date_by_publication
+        and not strict_publication
+        and not article_ids
+    ):
+        articles = [a for a in articles if article_in_daily_digest_window(a, since)]
 
     if article_ids:
         order = {aid: idx for idx, aid in enumerate(article_ids)}
@@ -1200,6 +1214,7 @@ def build_report(
             report_filter=report_filter,
             date_by_publication=use_pub_date,
             strict_publication=strict_publication,
+            mode=mode,
         )
         if not articles:
             now = _tz_now()

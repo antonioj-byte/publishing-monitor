@@ -16,6 +16,7 @@ def pending_date_sql(
     date_by_publication: bool,
     strict_publication: bool,
     alias: str = "a",
+    mode: str | None = None,
 ) -> tuple[str, str]:
     """Return (date_expression, extra_and_clause) for pending-article counts."""
     if not date_by_publication:
@@ -24,6 +25,19 @@ def pending_date_sql(
         return (
             f"{alias}.fecha_publicacion",
             f"AND {alias}.fecha_publicacion IS NOT NULL AND {alias}.fecha_publicacion != ''",
+        )
+    report_mode = ReportMode.from_str(mode) if mode else None
+    if report_mode is ReportMode.DAILY_DIGEST:
+        # Daily /informe: trust ingestion only when RSS has no publication date.
+        # Do NOT use MAX(pub, ingesta) — Google News often re-ingests year-old items.
+        return (
+            (
+                f"CASE WHEN {alias}.fecha_publicacion IS NOT NULL "
+                f"AND {alias}.fecha_publicacion != '' "
+                f"THEN {alias}.fecha_publicacion "
+                f"ELSE {alias}.fecha_ingesta END"
+            ),
+            "",
         )
     # Catalog (/informe N país|tag): en ventana si publicación O ingesta recientes
     # (MAX evita excluir artículos con fecha RSS antigua pero ingeridos esta semana).

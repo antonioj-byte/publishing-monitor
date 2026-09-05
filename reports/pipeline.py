@@ -42,6 +42,7 @@ def _pending_in_window(
     date_expr, pub_filter = pending_date_sql(
         date_by_publication=date_by_publication,
         strict_publication=strict_publication,
+        mode=mode,
     )
 
     if mode == "informe_hoy" or (mode == "informe" and not report_filter):
@@ -163,6 +164,7 @@ def build_editorial_report(
                 since_iso=since.astimezone(ZoneInfo("UTC")).isoformat(),
                 date_by_publication=use_pub_date,
                 strict_publication_date=strict_pub,
+                report_mode=resolved_mode,
                 batch_size=_BATCH_SIZE,
                 max_batches=max_batches,
             )
@@ -216,6 +218,7 @@ def classify_pending_for_daily_report(*, max_batches: int = 5) -> dict[str, int]
         since_iso=since.astimezone(ZoneInfo("UTC")).isoformat(),
         date_by_publication=use_pub_date,
         strict_publication_date=strict_pub,
+        report_mode=resolved_mode,
         batch_size=_BATCH_SIZE,
         max_batches=batches,
     )

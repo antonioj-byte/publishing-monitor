@@ -135,11 +135,13 @@ def count_pending_in_window(
     *,
     date_by_publication: bool,
     strict_publication: bool,
+    mode: str = "informe",
 ) -> int:
     since_iso = since.astimezone(ZoneInfo("UTC")).isoformat()
     date_expr, pub_filter = pending_date_sql(
         date_by_publication=date_by_publication,
         strict_publication=strict_publication,
+        mode=mode,
     )
     with get_connection() as conn:
         return conn.execute(
@@ -258,6 +260,7 @@ def _format_default_diagnostico() -> str:
     date_expr, pub_filter = pending_date_sql(
         date_by_publication=use_pub_date,
         strict_publication=strict_pub,
+        mode=mode,
     )
 
     with get_connection() as conn:
@@ -276,6 +279,7 @@ def _format_default_diagnostico() -> str:
         include_sent=False,
         date_by_publication=use_pub_date,
         strict_publication=strict_pub,
+        mode=mode,
     )
     batch, _total = limit_batch_for_prioritization(articles)
     result = prioritize_articles(batch)
@@ -283,10 +287,11 @@ def _format_default_diagnostico() -> str:
         since,
         date_by_publication=use_pub_date,
         strict_publication=strict_pub,
+        mode=mode,
     )
 
     date_label = "publicación (estricta)" if strict_pub else (
-        "publicación o ingesta reciente" if use_pub_date else "ingesta"
+        "publicación (ingesta solo si falta fecha RSS)" if use_pub_date else "ingesta"
     )
     lines = [
         "Diagnóstico del informe diario",
@@ -333,6 +338,7 @@ def informe_shortfall_hint(*, article_count: int, threshold: int = 10) -> str | 
         since,
         date_by_publication=use_pub_date,
         strict_publication=strict_pub,
+        mode=mode,
     )
     if pending_in_window <= 0:
         if article_count == 0:

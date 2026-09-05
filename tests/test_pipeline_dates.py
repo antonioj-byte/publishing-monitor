@@ -8,7 +8,7 @@ from reports.pipeline_dates import date_flags_for_mode, pending_date_sql
 
 
 class PipelineDatesTests(unittest.TestCase):
-    def test_daily_digest_allows_ingesta_fallback(self) -> None:
+    def test_daily_digest_allows_ingesta_when_no_publication(self) -> None:
         use_pub, strict = date_flags_for_mode("informe")
         self.assertTrue(use_pub)
         self.assertFalse(strict)
@@ -25,6 +25,16 @@ class PipelineDatesTests(unittest.TestCase):
         )
         self.assertIn("fecha_publicacion", expr)
         self.assertIn("IS NOT NULL", extra)
+
+    def test_daily_digest_sql_uses_publication_not_max(self) -> None:
+        expr, extra = pending_date_sql(
+            date_by_publication=True,
+            strict_publication=False,
+            mode="informe",
+        )
+        self.assertIn("CASE WHEN", expr)
+        self.assertNotIn("MAX(", expr)
+        self.assertEqual(extra, "")
 
     def test_catalog_uses_max_of_publication_and_ingesta(self) -> None:
         expr, extra = pending_date_sql(
