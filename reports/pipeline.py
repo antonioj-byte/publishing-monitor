@@ -26,8 +26,9 @@ logger = logging.getLogger(__name__)
 
 _BATCH_SIZE = 20
 _MAX_BATCHES = 60
-_FILTERED_CLASSIFY_BATCH_CAP = 5  # up to 100 articles per país/tag/hoy informe
+_FILTERED_CLASSIFY_BATCH_CAP = 5  # up to 100 articles per país/tag informe
 _DAILY_CLASSIFY_BATCH_CAP = 5  # up to 100 articles for /informe diario (fast path)
+_HOY_CLASSIFY_BATCH_CAP = 2  # up to 40 articles for /informe_hoy (Telegram fast path)
 
 
 def _pending_in_window(
@@ -106,6 +107,21 @@ def _batches_for_daily_pending(pending: int) -> int:
     return min(needed, _DAILY_CLASSIFY_BATCH_CAP)
 
 
+def _batches_for_hoy_pending(pending: int) -> int:
+    if pending <= 0:
+        return 0
+    needed = (pending + _BATCH_SIZE - 1) // _BATCH_SIZE
+    return min(needed, _HOY_CLASSIFY_BATCH_CAP)
+
+
+def _batches_for_telegram_mode(mode: str, pending: int) -> int:
+    if mode == "informe_hoy":
+        return _batches_for_hoy_pending(pending)
+    if mode == "informe":
+        return _batches_for_daily_pending(pending)
+    return _batches_for_filtered_pending(pending)
+
+
 def _should_classify_for_filter(mode: str, report_filter: ReportFilter | None) -> bool:
     if mode == "informe_hoy":
         return True
@@ -153,7 +169,7 @@ def build_editorial_report(
             if max_classify_batches is not None:
                 max_batches = min(max_batches, max_classify_batches)
         elif pending > 0 and _should_classify_for_filter(resolved_mode, report_filter):
-            max_batches = _batches_for_filtered_pending(pending)
+            max_batches = _batches_for_telegram_mode(resolved_mode, pending)
             if max_classify_batches is not None:
                 max_batches = min(max_batches, max_classify_batches)
         else:
