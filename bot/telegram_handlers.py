@@ -878,7 +878,11 @@ async def _send_report(
         status = status_message
     else:
         label = "Markdown" if markdown_only else "informe"
-        if settings.classify_before_telegram_report or (mode == "informe" and report_filter is None):
+        if mode == "informe_hoy":
+            status = f"Clasificando pendientes de hoy y generando {label}…"
+        elif settings.classify_before_telegram_report or (
+            mode == "informe" and report_filter is None
+        ):
             status = f"Clasificando y generando {label}{_filter_label(report_filter)}…"
         else:
             status = f"Generando {label}{_filter_label(report_filter)}…"
@@ -886,11 +890,16 @@ async def _send_report(
 
     classify_cap = None
     classify_before = settings.classify_before_telegram_report
+    retranslate_limit = 15
     if settings.classify_before_telegram_report:
         classify_cap = 1
     elif mode == "informe" and report_filter is None:
         classify_before = True
         classify_cap = 5
+    elif mode == "informe_hoy":
+        classify_before = False
+        classify_cap = 2
+        retranslate_limit = 0
     try:
         report = await asyncio.to_thread(
             partial(
@@ -901,6 +910,7 @@ async def _send_report(
                 classify_before_report=classify_before,
                 max_classify_batches=classify_cap,
                 use_embedding_prioritization=settings.prioritize_before_telegram_report,
+                retranslate_limit=retranslate_limit,
             )
         )
 

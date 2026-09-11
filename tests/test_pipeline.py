@@ -7,6 +7,8 @@ import unittest
 from reports.pipeline import (
     _batches_for_daily_pending,
     _batches_for_filtered_pending,
+    _batches_for_hoy_pending,
+    _batches_for_telegram_mode,
     _max_classify_batches,
     _should_classify_for_filter,
 )
@@ -54,6 +56,17 @@ class PipelineBatchTests(unittest.TestCase):
         self.assertEqual(_batches_for_daily_pending(20), 1)
         self.assertEqual(_batches_for_daily_pending(100), 5)
         self.assertEqual(_batches_for_daily_pending(500), 5)
+
+    def test_batches_for_hoy_pending_caps_at_two(self) -> None:
+        self.assertEqual(_batches_for_hoy_pending(0), 0)
+        self.assertEqual(_batches_for_hoy_pending(20), 1)
+        self.assertEqual(_batches_for_hoy_pending(40), 2)
+        self.assertEqual(_batches_for_hoy_pending(100), 2)
+
+    def test_batches_for_telegram_mode(self) -> None:
+        self.assertEqual(_batches_for_telegram_mode("informe_hoy", 100), 2)
+        self.assertEqual(_batches_for_telegram_mode("informe", 100), 5)
+        self.assertEqual(_batches_for_telegram_mode("informe_pais", 100), 5)
 
 
 if __name__ == "__main__":
