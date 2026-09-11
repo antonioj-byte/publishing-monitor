@@ -51,20 +51,22 @@ def format_article_entry(item: dict) -> str:
     else:
         subtitulo = esc(item["resumen_generado"] or "(sin resumen)")
 
+    lines = [f"<b>{titular}</b>", subtitulo]
+
     medio = _format_medio(item.get("medio_nombre", "") or "")
-    medio_line = f"MEDIO: {medio}" if medio else "MEDIO:"
+    if medio:
+        lines.append(f"<i>{medio}</i>")
 
     url = (item.get("url") or "").strip()
-    link = esc(url) if url else "——"
+    lines.append(esc(url) if url else "——")
 
-    tags_value = ""
     raw_tags = item.get("tags")
     if raw_tags:
         try:
             keys = json.loads(raw_tags) if isinstance(raw_tags, str) else raw_tags
             labels = topical_tag_labels(keys)
             if labels:
-                tags_value = esc(", ".join(labels))
+                lines.append(f"🏷️ {esc(', '.join(labels))}")
         except (json.JSONDecodeError, TypeError):
             pass
 
@@ -73,15 +75,6 @@ def format_article_entry(item: dict) -> str:
         timezone_name=settings.timezone,
     )
     if ingesta:
-        ingesta_line = f"INGESTA: 📥 {esc(ingesta)}"
-    else:
-        ingesta_line = "INGESTA:"
+        lines.append(f"📥 {esc(ingesta)}")
 
-    return (
-        f"TITULAR: {titular}\n"
-        f"SUBTÍTULO: {subtitulo}\n"
-        f"{medio_line}\n"
-        f"LINK: {link}\n"
-        f"TAGS: {tags_value}\n"
-        f"{ingesta_line}"
-    )
+    return "\n".join(lines)

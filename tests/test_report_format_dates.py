@@ -342,7 +342,7 @@ class PublicationDateTests(unittest.TestCase):
 
 
 class TelegramFormatTests(unittest.TestCase):
-    def test_labeled_article_format(self) -> None:
+    def test_article_format_without_labels(self) -> None:
         text = format_article_entry(
             {
                 "titulo_original": "Titular original",
@@ -358,18 +358,19 @@ class TelegramFormatTests(unittest.TestCase):
                 "tags": '["ensayo_literario"]',
             }
         )
-        self.assertIn("TITULAR: Titular en castellano", text)
-        self.assertIn("SUBTÍTULO: Resumen breve.", text)
-        self.assertIn("MEDIO: Le Monde Livres.", text)
-        self.assertIn("LINK: https://example.com/a", text)
-        self.assertIn("TAGS: Ensayo literario/filosófico", text)
-        self.assertIn("INGESTA: 📥 14/08/2026", text)
+        self.assertIn("<b>Titular en castellano</b>", text)
+        self.assertIn("Resumen breve.", text)
+        self.assertIn("<i>Le Monde Livres.</i>", text)
+        self.assertIn("https://example.com/a", text)
+        self.assertIn("🏷️ Ensayo literario/filosófico", text)
+        self.assertIn("📥 14/08/2026", text)
+        self.assertNotIn("TITULAR:", text)
+        self.assertNotIn("SUBTÍTULO:", text)
         self.assertNotIn("Tier", text)
         self.assertNotIn("📰", text)
-        self.assertNotIn("🏷️", text)
         self.assertNotIn("🔗", text)
 
-    def test_missing_url_and_ingesta(self) -> None:
+    def test_missing_url_tags_and_ingesta(self) -> None:
         text = format_article_entry(
             {
                 "titulo_original": "Solo titular",
@@ -381,12 +382,11 @@ class TelegramFormatTests(unittest.TestCase):
                 "medio_nombre": "",
             }
         )
-        self.assertIn("TITULAR: Solo titular", text)
-        self.assertIn("SUBTÍTULO: (sin resumen)", text)
-        self.assertIn("MEDIO:", text)
-        self.assertIn("LINK: ——", text)
-        self.assertIn("TAGS:", text)
-        self.assertTrue(text.endswith("INGESTA:"))
+        self.assertIn("<b>Solo titular</b>", text)
+        self.assertIn("(sin resumen)", text)
+        self.assertIn("——", text)
+        self.assertNotIn("🏷️", text)
+        self.assertNotIn("📥", text)
 
 
 if __name__ == "__main__":
