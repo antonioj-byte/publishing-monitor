@@ -342,7 +342,7 @@ class PublicationDateTests(unittest.TestCase):
 
 
 class TelegramFormatTests(unittest.TestCase):
-    def test_headline_is_bold_without_tier(self) -> None:
+    def test_labeled_article_format(self) -> None:
         text = format_article_entry(
             {
                 "titulo_original": "Titular original",
@@ -354,14 +354,39 @@ class TelegramFormatTests(unittest.TestCase):
                 "medio_nombre": "Le Monde Livres",
                 "medio_tier": 1,
                 "fecha_publicacion": "2026-08-14T09:00:00+00:00",
+                "fecha_ingesta": "2026-08-14T10:00:00+00:00",
+                "tags": '["ensayo_literario"]',
             }
         )
-        self.assertIn("<b>Titular en castellano</b>", text)
+        self.assertIn("TITULAR: Titular en castellano", text)
+        self.assertIn("SUBTÍTULO: Resumen breve.", text)
+        self.assertIn("MEDIO: Le Monde Livres.", text)
+        self.assertIn("LINK: https://example.com/a", text)
+        self.assertIn("TAGS: Ensayo literario/filosófico", text)
+        self.assertIn("INGESTA: 📥 14/08/2026", text)
         self.assertNotIn("Tier", text)
-        self.assertIn("<i>Le Monde Livres</i>", text)
-        self.assertIn("📅 Publicado: 14/08/2026", text)
-        self.assertLess(text.index("Resumen breve."), text.index("📅"))
-        self.assertLess(text.index("📅"), text.index("🔗"))
+        self.assertNotIn("📰", text)
+        self.assertNotIn("🏷️", text)
+        self.assertNotIn("🔗", text)
+
+    def test_missing_url_and_ingesta(self) -> None:
+        text = format_article_entry(
+            {
+                "titulo_original": "Solo titular",
+                "titular_traducido": None,
+                "resumen_generado": None,
+                "resumen_raw": "",
+                "idioma": "es",
+                "url": "",
+                "medio_nombre": "",
+            }
+        )
+        self.assertIn("TITULAR: Solo titular", text)
+        self.assertIn("SUBTÍTULO: (sin resumen)", text)
+        self.assertIn("MEDIO:", text)
+        self.assertIn("LINK: ——", text)
+        self.assertIn("TAGS:", text)
+        self.assertTrue(text.endswith("INGESTA:"))
 
 
 if __name__ == "__main__":

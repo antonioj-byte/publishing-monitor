@@ -58,7 +58,7 @@ def _wider_period_hint(days: int | None, label: str) -> str:
 
 CATEGORY_HEADERS: dict[Categoria, str] = {
     "ideas": "📚 Ideas del mundo editorial",
-    "noticias": "📰 Noticias del mundo editorial",
+    "noticias": "Noticias del mundo editorial",
 }
 
 MORE_FOOTER = (
@@ -86,9 +86,9 @@ class ReportResult:
 def _relevance_tiers() -> list[tuple[int, str, int]]:
     """Report sections by article relevance score (NOT media tier)."""
     return [
-        (5, "🔥 Destacado (score 5)", settings.max_destacados),
-        (4, "📌 Relevante (score 4)", settings.max_relevantes),
-        (3, "📋 Secundarias (score 3)", settings.max_secundarios),
+        (5, "Destacado (score 5)", settings.max_destacados),
+        (4, "Relevante (score 4)", settings.max_relevantes),
+        (3, "Secundarias (score 3)", settings.max_secundarios),
     ]
 
 
@@ -894,7 +894,7 @@ def _collapse_events_for_report(articles: list[dict]) -> list[dict]:
     """
     One article per editorial event in the report body.
 
-    Multi-source events are summarized in 📡 En varios medios; the body keeps
+    Multi-source events are summarized in En varios medios; the body keeps
     the best single entry so trade press does not fill the word budget.
     """
     by_event: dict[int, list[dict]] = {}
@@ -988,7 +988,7 @@ def _format_trends_section(trends: list[dict], max_trends: int = 5) -> list[str]
     if not trends:
         return []
 
-    lines = ["📡 En varios medios", ""]
+    lines = ["En varios medios", ""]
     for trend in trends[:max_trends]:
         medios_parts: list[str] = []
         seen: set[str] = set()
@@ -1020,18 +1020,18 @@ def _header_lines(mode: str, report_filter: ReportFilter | None, now: datetime) 
     if mode == "informe_pais" and report_filter:
         if report_filter.medio_nombre:
             title = (
-                f"📋 Informe — {report_filter.medio_nombre} "
+                f"Informe — {report_filter.medio_nombre} "
                 f"(últimos {report_filter.days} días)"
             )
         elif report_filter.location_label:
             title = (
-                f"📋 Informe — {report_filter.location_label} "
+                f"Informe — {report_filter.location_label} "
                 f"(últimos {report_filter.days} días)"
             )
         elif tag_part:
-            title = f"📋 Informe — {tag_part} (últimos {report_filter.days} días)"
+            title = f"Informe — {tag_part} (últimos {report_filter.days} días)"
         else:
-            title = f"📋 Informe (últimos {report_filter.days} días)"
+            title = f"Informe (últimos {report_filter.days} días)"
         if tag_part and (
             report_filter.location_label or report_filter.medio_nombre
         ):
@@ -1041,14 +1041,14 @@ def _header_lines(mode: str, report_filter: ReportFilter | None, now: datetime) 
         lines = [f"{title} — {date_str}"]
     elif mode == "informe_hoy":
         lines = [
-            f"📋 Informe de hoy — {date_str}",
+            f"Informe de hoy — {date_str}",
             "<i>Solo artículos publicados en web hoy (fecha de publicación).</i>",
         ]
     elif mode == "informe_mas":
-        lines = [f"📋 Informe (continuación) — {date_str}"]
+        lines = [f"Informe (continuación) — {date_str}"]
     else:
         lines = [
-            f"📋 Informe editorial — {date_str}",
+            f"Informe editorial — {date_str}",
             "<i>Artículos publicados desde el último cierre.</i>",
         ]
     return lines
