@@ -8,7 +8,7 @@ import re
 
 from ai.translation import is_likely_untranslated
 from bot.config import settings
-from reports.dates import format_publication_display
+from reports.dates import format_ingesta_display
 from reports.tags import tag_labels as topical_tag_labels
 
 
@@ -25,6 +25,15 @@ def md_italic_to_html(text: str) -> str:
     return re.sub(r"_([^_]+)_", repl, text)
 
 
+def _format_medio(medio: str) -> str:
+    medio = medio.strip()
+    if not medio:
+        return ""
+    if not medio.endswith("."):
+        medio = f"{medio}."
+    return esc(medio)
+
+
 def format_article_entry(item: dict) -> str:
     untranslated = is_likely_untranslated(
         idioma=item.get("idioma", "es"),
@@ -35,29 +44,44 @@ def format_article_entry(item: dict) -> str:
     )
     titular = esc(item["titular_traducido"] or item["titulo_original"])
     if untranslated:
-        resumen = (
-            "<i>(Traducción al castellano pendiente — "
-            "usa /retraducir y vuelve a pedir el informe)</i>"
+        subtitulo = esc(
+            "(Traducción al castellano pendiente — "
+            "usa /retraducir y vuelve a pedir el informe)"
         )
     else:
-        resumen = esc(item["resumen_generado"] or "(sin resumen)")
-    medio = item.get("medio_nombre", "")
-    source = f" — <i>{esc(medio)}</i>" if medio else ""
-    tag_line = ""
+        subtitulo = esc(item["resumen_generado"] or "(sin resumen)")
+
+    medio = _format_medio(item.get("medio_nombre", "") or "")
+    medio_line = f"MEDIO: {medio}" if medio else "MEDIO:"
+
+    url = (item.get("url") or "").strip()
+    link = esc(url) if url else "——"
+
+    tags_value = ""
     raw_tags = item.get("tags")
     if raw_tags:
         try:
             keys = json.loads(raw_tags) if isinstance(raw_tags, str) else raw_tags
             labels = topical_tag_labels(keys)
             if labels:
-                tag_line = f"\n🏷️ {esc(', '.join(labels))}"
+                tags_value = esc(", ".join(labels))
         except (json.JSONDecodeError, TypeError):
             pass
-    url = esc(item["url"])
-    pub_line = format_publication_display(
-        item.get("fecha_publicacion"),
+
+    ingesta = format_ingesta_display(
+        item.get("fecha_ingesta"),
         timezone_name=settings.timezone,
-        fallback_ingesta=item.get("fecha_ingesta"),
     )
-    date_block = f"\n📅 {esc(pub_line)}" if pub_line else ""
-    return f"📰 <b>{titular}</b>{source}\n{resumen}{tag_line}{date_block}\n🔗 {url}"
+    if ingesta:
+        ingesta_line = f"INGESTA: 📥 {esc(ingesta)}"
+    else:
+        ingesta_line = "INGESTA:"
+
+    return (
+        f"TITULAR: {titular}\n"
+        f"SUBTÍTULO: {subtitulo}\n"
+        f"{medio_line}\n"
+        f"LINK: {link}\n"
+        f"TAGS: {tags_value}\n"
+        f"{ingesta_line}"
+    )

@@ -78,3 +78,16 @@ def format_publication_display(
         return None
     local = dt.astimezone(ZoneInfo(timezone_name))
     return f"{label_prefix}: {local.strftime('%d/%m/%Y')}"
+
+
+def format_ingesta_display(
+    fecha_ingesta: str | None,
+    *,
+    timezone_name: str = "Europe/Madrid",
+) -> str | None:
+    """Human-readable ingest date for Telegram (dd/mm/yyyy)."""
+    dt = parse_publication_datetime(fecha_ingesta)
+    if dt is None:
+        return None
+    local = dt.astimezone(ZoneInfo(timezone_name))
+    return local.strftime("%d/%m/%Y")
